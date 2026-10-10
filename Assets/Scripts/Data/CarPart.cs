@@ -5,7 +5,8 @@ public enum PartCategory
 {
     Trim,
     Wheel,
-    Color
+    Color,
+    Accessory
 }
 
 [Serializable]
