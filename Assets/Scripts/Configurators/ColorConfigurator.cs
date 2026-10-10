@@ -37,5 +37,9 @@ public class ColorConfigurator : CarPartConfigurator
 
             Debug.Log($"[Color] 바디 색상 적용 완료: {part.name} ({part.colorHex}) - 적용 렌더러 {bodyRenderers.Count}개");
         }
+        else
+        {
+            Debug.LogWarning($"[{gameObject.name}] 유효하지 않은 색상 코드 형식입니다: '{part.colorHex}' (파츠: {part.name})");
+        }
     }
 }
