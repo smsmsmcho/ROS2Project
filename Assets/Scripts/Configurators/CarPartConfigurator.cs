@@ -23,6 +23,12 @@ public class CarPartConfigurator : MonoBehaviour
     public void Initialize(List<CarPart> partOptions)
     {
         this.options = partOptions ?? new List<CarPart>();
+
+        if (optionObjects != null && optionObjects.Count > 0 && options.Count != optionObjects.Count)
+        {
+            Debug.LogWarning($"[{gameObject.name}] 옵션 데이터 수({options.Count})와 3D 오브젝트 수({optionObjects.Count})가 일치하지 않습니다. 인스펙터 설정을 확인해주세요.");
+        }
+
         if (options.Count > 0)
         {
             SelectOption(options[0]); // 기본 첫 번째 옵션 적용
