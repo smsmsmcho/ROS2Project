@@ -1,22 +1,25 @@
 using System;
 using System.Collections.Generic;
 
+/// <summary>
+/// Gemini AI ë¶„ì„ ê²°ê³¼ë¡œ ë°˜í™˜ë˜ëŠ” ì°¨ëŸ‰ ì»¤ìŠ¤í„°ë§ˆì´ì§• ì¶”ì²œ ë°ì´í„° DTO.
+/// </summary>
 [Serializable]
 public class AiRecommendationData
 {
     /// <summary>
-    /// AI°¡ ÃßÃµÇÑ CarPart ID ¸ñ·Ï.
-    /// °¢ ID´Â CarParts.jsonÀÇ CarPart.id¿Í ¸ÅÄªµË´Ï´Ù.
+    /// AIê°€ ì¶”ì²œí•œ CarPart ID ëª©ë¡.
+    /// ê° IDëŠ” CarParts.jsonì˜ CarPart.idì™€ ë§¤ì¹­ë©ë‹ˆë‹¤.
     /// </summary>
     public List<string> partIds;
 
     /// <summary>
-    /// AI°¡ ÀÛ¸íÇÑ Ä¿½ºÅÒ ºôµå ÄÁ¼Á Å¸ÀÌÆ²
+    /// AIê°€ ì‘ëª…í•œ ì»¤ìŠ¤í…€ ì°¨ëŸ‰ ì»¨ì…‰ íƒ€ì´í‹€
     /// </summary>
     public string conceptTitle;
 
     /// <summary>
-    /// »ç¿ëÀÚÀÇ ¿äÃ»°ú ÃßÃµ °á°ú¸¦ ¿¬°áÇÏ´Â AIÀÇ ÃßÃµ ±Ù°Å
+    /// ì‚¬ìš©ì ìš”ì²­ê³¼ ì¶”ì²œ ì¡°í•©ì„ ì„¤ëª…í•˜ëŠ” AIì˜ ì¶”ì²œ ê·¼ê±°
     /// </summary>
     public string reasoning;
 
@@ -24,6 +27,6 @@ public class AiRecommendationData
     {
         return $"[{conceptTitle}]\n" +
                $"- Parts: {string.Join(", ", partIds)}\n" +
-               $"- ÀÌÀ¯: {reasoning}";
+               $"- ì´ìœ : {reasoning}";
     }
-}
+}
