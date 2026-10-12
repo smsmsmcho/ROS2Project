@@ -138,7 +138,7 @@ public class CarConfiguratorManagerTests
         };
 
         // Wheel을 wheelB(1500원)로 변경 (기존: accA 1000 + wheelA 500 + colorA 200 = 1700 -> 신규: 1000 + 1500 + 200 = 2700)
-        manager.ApplyPart(wheelB);
+        manager.ApplyPart(wheelB.id);
 
         Assert.AreEqual(1, eventCallCount, "이벤트가 1회 호출되어야 합니다.");
         Assert.IsNotNull(lastEstimate);
@@ -202,7 +202,7 @@ public class CarConfiguratorManagerTests
     }
 
     /// <summary>
-    /// [안전 방어 - null 입력 방어] 잘못된 null 파츠를 ApplyPart에 전달했을 때,
+    /// [안전 방어 - null 입력 방어] 잘못된 null 파츠 ID를 ApplyPart에 전달했을 때,
     /// 크래시(예외) 없이 경고 로그만 남기고 기존 장착 상태와 견적을 안전하게 보존하는지 검증합니다.
     /// </summary>
     [Test]
@@ -210,7 +210,7 @@ public class CarConfiguratorManagerTests
     {
         EstimateData before = manager.CalculateEstimate();
 
-        LogAssert.Expect(LogType.Warning, "[CarConfiguratorManager] 적용하려는 CarPart가 null입니다.");
+        LogAssert.Expect(LogType.Warning, "[CarConfiguratorManager] 적용하려는 CarPart를 찾을 수 없습니다. (partId: )");
         manager.ApplyPart(null);
 
         EstimateData after = manager.CalculateEstimate();

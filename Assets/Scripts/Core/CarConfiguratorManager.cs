@@ -92,13 +92,14 @@ public class CarConfiguratorManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 단일 파츠를 해당 카테고리의 컨피규레이터에 적용하고, 견적을 재계산하여 알립니다.
+    /// 파츠 ID(partId)로 단일 파츠를 찾아 해당 카테고리의 컨피규레이터에 적용하고, 견적을 재계산하여 알립니다.
     /// </summary>
-    public void ApplyPart(CarPart part)
+    public void ApplyPart(string partId)
     {
+        CarPart part = GetAllAvailableParts().FirstOrDefault(p => p.id == partId);
         if (part == null)
         {
-            Debug.LogWarning($"[{nameof(CarConfiguratorManager)}] 적용하려는 CarPart가 null입니다.");
+            Debug.LogWarning($"[{nameof(CarConfiguratorManager)}] 적용하려는 CarPart를 찾을 수 없습니다. (partId: {partId})");
             return;
         }
 
