@@ -26,8 +26,8 @@ public class CarPartConfiguratorTests
         configurator = rootObject.AddComponent<CarPartConfigurator>();
 
         // 2. 가짜 CarPart 데이터 준비
-        partA = new CarPart { id = "trim_standard", name = "Standard Trim", category = PartCategory.Trim, price = 1000 };
-        partB = new CarPart { id = "trim_racing", name = "Racing Trim", category = PartCategory.Trim, price = 2000 };
+        partA = new CarPart { id = "acc_spoiler_std", name = "Standard Spoiler", category = PartCategory.Accessory, price = 1000 };
+        partB = new CarPart { id = "acc_carbon_wing", name = "Carbon Racing Wing", category = PartCategory.Accessory, price = 2000 };
 
         // 3. 가짜 3D 모델 GameObject 준비
         modelObjA = new GameObject("Model_A");

@@ -230,9 +230,63 @@ public class CarConfiguratorManagerTests
         typeof(CarConfiguratorManager).GetField("wheelConfigurator", flags).SetValue(manager, null);
         typeof(CarConfiguratorManager).GetField("colorConfigurator", flags).SetValue(manager, null);
 
-        LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[CarConfiguratorManager\] AI 추천 요청 실패:.*"));
+        string failedMessage = null;
+        manager.OnRecommendationFailed += (msg) => failedMessage = msg;
+
+        LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(@"\[CarConfiguratorManager\] AI 추천 요청 실패.*"));
         var result = await manager.RequestRecommendationAsync("추천해줘");
 
         Assert.IsNull(result, "예외 발생 시 크래시 없이 null을 반환해야 합니다.");
+        Assert.IsFalse(string.IsNullOrEmpty(failedMessage), "예외 발생 시 UI에 실패 안내 메시지가 전달되어야 합니다.");
+    }
+
+    /// <summary>
+    /// [안전 방어 - 동일 카테고리 중복 파츠 방어] AI 추천 데이터에 같은 카테고리(예: Color 2개)가 들어왔을 때,
+    /// 경고 로그를 출력하고 첫 번째 색상을 유지하며 두 번째 색상으로 덮어쓰지 않는지 검증합니다.
+    /// </summary>
+    [Test]
+    public void ApplyAiRecommendation_WithDuplicateCategory_LogsWarningAndKeepsFirstPart()
+    {
+        var aiData = new AiRecommendationData
+        {
+            conceptTitle = "중복 컬러 테스트",
+            reasoning = "컬러 2개 수신 상황 시뮬레이션",
+            partIds = new List<string> { colorB.id, colorA.id, wheelB.id }
+        };
+
+        LogAssert.Expect(LogType.Warning, $"[CarConfiguratorManager] 'Color' 카테고리에 중복 파츠('{colorA.id}')가 감지되어 덮어쓰기를 건너뜁니다.");
+        manager.ApplyAiRecommendation(aiData);
+
+        Assert.AreEqual(colorB, colorConfigurator.GetSelectedPart(), "첫 번째로 적용된 colorB가 덮어써지지 않고 유지되어야 합니다.");
+        Assert.AreEqual(wheelB, wheelConfigurator.GetSelectedPart());
+    }
+
+    /// <summary>
+    /// [안전 방어 - 적용된 파츠 0개 경고] AI 추천 데이터에 유효한 파츠가 하나도 없어 실제로 적용된 파츠가 0개일 때,
+    /// "추천을 적용하지 못했습니다." 경고를 띄우고 OnRecommendationFailed 이벤트를 호출하는지 검증합니다.
+    /// </summary>
+    [Test]
+    public void ApplyAiRecommendation_WithZeroValidParts_LogsWarningAndFiresFailedEvent()
+    {
+        string failedMessage = null;
+        int configUpdatedCount = 0;
+        manager.OnRecommendationFailed += (msg) => failedMessage = msg;
+        manager.OnConfigUpdated += (_) => configUpdatedCount++;
+
+        var invalidAiData = new AiRecommendationData
+        {
+            conceptTitle = "무효 ID 테스트",
+            reasoning = "존재하지 않는 파츠 ID만 포함된 응답",
+            partIds = new List<string> { "invalid_part_id" }
+        };
+
+        LogAssert.Expect(LogType.Warning, "[CarConfiguratorManager] 추천된 파츠 ID 'invalid_part_id'를 찾을 수 없어 건너뜁니다.");
+        LogAssert.Expect(LogType.Warning, "[CarConfiguratorManager] 추천을 적용하지 못했습니다.");
+        manager.ApplyAiRecommendation(invalidAiData);
+
+        Assert.AreEqual("추천을 적용하지 못했습니다.", failedMessage);
+        Assert.AreEqual(0, configUpdatedCount, "적용된 파츠가 0개이면 OnConfigUpdated 이벤트가 호출되지 않아야 합니다.");
     }
 }
+
+

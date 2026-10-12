@@ -38,18 +38,22 @@ public class GeminiRecommendationServiceTests
             Assert.IsFalse(string.IsNullOrEmpty(part.name), $"part.name이 비어있습니다. id: {part.id}");
             Assert.GreaterOrEqual(part.price, 0, $"part.price는 0 이상이어야 합니다. id: {part.id}");
             Assert.IsFalse(string.IsNullOrEmpty(part.description), $"part.description이 비어있습니다. id: {part.id}");
-            Assert.IsFalse(string.IsNullOrEmpty(part.colorHex), $"part.colorHex가 비어있습니다. id: {part.id}");
+
+            if (part.category == PartCategory.Color)
+            {
+                Assert.IsFalse(string.IsNullOrEmpty(part.colorHex), $"Color 파츠의 part.colorHex가 비어있습니다. id: {part.id}");
+            }
         }
 
-        int trimCount = carParts.Count(p => p.category == PartCategory.Trim);
+        int accessoryCount = carParts.Count(p => p.category == PartCategory.Accessory);
         int wheelCount = carParts.Count(p => p.category == PartCategory.Wheel);
         int colorCount = carParts.Count(p => p.category == PartCategory.Color);
 
-        Assert.Greater(trimCount, 0, "Trim 파츠가 최소 1개 이상 있어야 합니다.");
+        Assert.Greater(accessoryCount, 0, "Accessory 파츠가 최소 1개 이상 있어야 합니다.");
         Assert.Greater(wheelCount, 0, "Wheel 파츠가 최소 1개 이상 있어야 합니다.");
         Assert.Greater(colorCount, 0, "Color 파츠가 최소 1개 이상 있어야 합니다.");
 
-        Debug.Log($"[파츠 데이터 검증 완료] 총 {carParts.Count}개 파츠 (Trim: {trimCount}, Wheel: {wheelCount}, Color: {colorCount})");
+        Debug.Log($"[파츠 데이터 검증 완료] 총 {carParts.Count}개 파츠 (Accessory: {accessoryCount}, Wheel: {wheelCount}, Color: {colorCount})");
     }
 
     [Test]
@@ -103,8 +107,8 @@ public class GeminiRecommendationServiceTests
 
         AiRecommendationData result = task.Result;
         Assert.IsNotNull(result);
-        Assert.IsTrue(result.partIds.Contains("color_monza_red"), "레드 요청 시 'color_monza_red'가 추천되어야 합니다.");
-        Assert.IsTrue(result.partIds.Contains("trim_widebody_racing"), "레이싱 요청 시 'trim_widebody_racing'이 추천되어야 합니다.");
+        Assert.IsTrue(result.partIds.Contains("color_guards_red"), "레드 요청 시 'color_guards_red'가 추천되어야 합니다.");
+        Assert.IsTrue(result.partIds.Contains("acc_front_splitter_skirt"), "레이싱 요청 시 'acc_front_splitter_skirt'가 추천되어야 합니다.");
 
         Debug.Log($"[프롬프트 매칭 검증 성공] 타이틀: {result.conceptTitle}");
     }
@@ -117,7 +121,7 @@ public class GeminiRecommendationServiceTests
         {
             conceptTitle = "테스트 주입 에디션",
             reasoning = "단위 테스트용 주입 데이터입니다.",
-            partIds = new List<string> { "trim_standard_aero", "wheel_std_twin5_spoke" }
+            partIds = new List<string> { "acc_rear_trunk_spoiler", "wheel_std_twin5_spoke" }
         };
 
         mock.CustomResponse = expectedData;
