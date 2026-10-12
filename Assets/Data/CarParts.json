@@ -1,122 +1,138 @@
 [
   {
-    "id": "trim_standard_aero",
-    "name": "Standard Aero Body Trim",
-    "price": 1800000,
-    "category": "Trim",
-    "description": "균형 잡힌 공기역학과 세련된 라인을 갖춘 팩토리 순정 스타일 에어로 바디 트림입니다.",
-    "colorHex": "#CCCCCC"
+    "id": "acc_front_splitter_skirt",
+    "name": "Carbon Front Splitter & Side Skirt Kit",
+    "price": 2800000,
+    "category": "Accessory",
+    "description": "프론트 범퍼 하단 스플리터와 카나드, 사이드 스커트 익스텐션으로 구성된 고성능 에어로 바디 악세서리 킷입니다.",
+    "colorHex": null
   },
   {
-    "id": "trim_widebody_racing",
-    "name": "Wide-Body Street Racing Trim",
-    "price": 8500000,
-    "category": "Trim",
-    "description": "오버펜더와 공기역학 디퓨저가 적용된 레이싱 전용 와이드 바디 트림 킷입니다.",
-    "colorHex": "#1E1E1E"
+    "id": "acc_rear_trunk_spoiler",
+    "name": "Carbon Rear Trunk Spoiler",
+    "price": 1800000,
+    "category": "Accessory",
+    "description": "트렁크 리드 상단에 장착되어 고속 주행 시 다운포스를 높이고 스포티한 후면 실루엣을 완성하는 카본 리어 스포일러입니다.",
+    "colorHex": null
   },
   {
     "id": "wheel_std_twin5_spoke",
-    "name": "Type-A 18\" Twin 5-Spoke Wheel",
+    "name": "Type-A 18\" Slotted Twin 5-Spoke Wheel",
     "price": 1400000,
     "category": "Wheel",
-    "description": "내구성과 경량 밸런스가 뛰어난 18인치 트윈 5스포크 스포츠 알로이 휠 세트입니다.",
-    "colorHex": "#C0C0C0"
+    "description": "스포크 중앙 슬릿 디자인으로 경량화와 제동 냉각 효율을 높인 18인치 트윈 5스포크 알로이 휠 세트입니다.",
+    "colorHex": null
   },
   {
-    "id": "wheel_deep_dish_forged",
-    "name": "Type-B 19\" Deep Dish Forged Wheel",
-    "price": 3600000,
+    "id": "wheel_split_v5_spoke",
+    "name": "Type-B 19\" V-Split 5-Spoke Wheel",
+    "price": 2200000,
     "category": "Wheel",
-    "description": "광폭 타이어 셋업에 최적화된 고강도 19인치 딥림(Deep Dish) 단조 레이싱 휠 세트입니다.",
-    "colorHex": "#9C6B30"
+    "description": "넓은 개방감으로 고성능 브레이크 캘리퍼를 돋보이게 하는 19인치 V-스플릿 5스포크 스포츠 휠 세트입니다.",
+    "colorHex": null
   },
   {
-    "id": "color_polar_white",
-    "name": "Polar Pure White",
+    "id": "wheel_multi_fin_spoke",
+    "name": "Type-C 19\" Multi-Fin Spoke Wheel",
+    "price": 2800000,
+    "category": "Wheel",
+    "description": "직선으로 뻗은 14개의 멀티 핀 스포크가 고급스럽고 세련된 비례감을 완성하는 19인치 럭셔리 스포트 휠 세트입니다.",
+    "colorHex": null
+  },
+  {
+    "id": "wheel_mesh_y_forged",
+    "name": "Type-D 20\" Y-Spoke Mesh Forged Wheel",
+    "price": 3800000,
+    "category": "Wheel",
+    "description": "서킷 주행의 횡하중을 견디는 고강성 Y-스포크 메쉬 구조의 20인치 초경량 단조 레이싱 휠 세트입니다.",
+    "colorHex": null
+  },
+  {
+    "id": "color_metallic_silver",
+    "name": "Metallic Silver",
     "price": 0,
     "category": "Color",
-    "description": "차량의 실루엣을 가장 깔끔하게 드러내는 기본 퓨어 화이트 외장 컬러입니다.",
-    "colorHex": "#F8F9FA"
+    "description": "메탈릭 입자가 차체 볼륨과 캐릭터 라인을 선명하게 강조하는 기본 메탈릭 실버 컬러입니다.",
+    "colorHex": "#A8ADB4"
   },
   {
-    "id": "color_obsidian_black",
-    "name": "Obsidian Metallic Black",
+    "id": "color_jet_black",
+    "name": "Jet Black",
     "price": 300000,
     "category": "Color",
-    "description": "빛 반사에 따라 깊은 광택을 보여주는 메탈릭 펄 블랙 컬러 옵션입니다.",
-    "colorHex": "#121316"
+    "description": "깊고 묵직한 블랙 톤으로 차량의 중후한 존재감을 극대화하는 제트 블랙 컬러입니다.",
+    "colorHex": "#0A0B0E"
   },
   {
-    "id": "color_titanium_silver",
-    "name": "Liquid Titanium Silver",
-    "price": 300000,
-    "category": "Color",
-    "description": "메탈릭 입자가 바디 볼륨 라인을 선명하게 강조하는 티타늄 실버 컬러입니다.",
-    "colorHex": "#8D99AE"
-  },
-  {
-    "id": "color_monza_red",
-    "name": "Monza Crimson Red",
-    "price": 500000,
-    "category": "Color",
-    "description": "스포츠 드라이빙의 감성을 극대화하는 비비드 레이싱 레드 컬러입니다.",
-    "colorHex": "#E50914"
-  },
-  {
-    "id": "color_track_yellow",
-    "name": "Velocity Track Yellow",
-    "price": 500000,
-    "category": "Color",
-    "description": "트랙 및 서킷 주행 시 시인성이 탁월한 고채도 스포츠 옐로우 컬러입니다.",
-    "colorHex": "#FFC107"
-  },
-  {
-    "id": "color_midnight_navy",
-    "name": "Midnight Metallic Navy",
+    "id": "color_deep_blue",
+    "name": "Deep Blue",
     "price": 400000,
     "category": "Color",
-    "description": "중후하면서도 세련된 광택을 지닌 다크 메탈릭 네이비 컬러입니다.",
-    "colorHex": "#1A237E"
+    "description": "깊은 바다를 연상시키는 고채도 다크 네이비 톤의 딥 블루 외장 컬러입니다.",
+    "colorHex": "#0A1E46"
   },
   {
-    "id": "color_british_green",
-    "name": "Emerald Racing Green",
+    "id": "color_guards_red",
+    "name": "Guards Red",
+    "price": 500000,
+    "category": "Color",
+    "description": "스포츠 드라이빙의 강렬한 에너지를 상징하는 시그니처 가즈 레드 컬러입니다.",
+    "colorHex": "#C40A14"
+  },
+  {
+    "id": "color_metallic_blue",
+    "name": "Metallic Midnight Blue",
+    "price": 500000,
+    "category": "Color",
+    "description": "은은한 인디고 펄과 다크 블루가 조화를 이루는 프리미엄 메탈릭 블루 컬러입니다.",
+    "colorHex": "#252A4A"
+  },
+  {
+    "id": "color_metallic_gunmetal",
+    "name": "Metallic Gunmetal Grey",
+    "price": 500000,
+    "category": "Color",
+    "description": "차분한 다크 그레이 베이스에 금속 질감을 살린 메탈릭 건메탈 그레이 컬러입니다.",
+    "colorHex": "#464B53"
+  },
+  {
+    "id": "color_chalk_silver",
+    "name": "Chalk Light Silver",
     "price": 600000,
     "category": "Color",
-    "description": "클래식 모터스포츠의 품격을 재해석한 딥 에메랄드 그린 컬러입니다.",
-    "colorHex": "#0B462A"
+    "description": "빛 반사를 부드럽게 억제한 세련된 초크 라이트 실버 외장 컬러입니다.",
+    "colorHex": "#D5D6D4"
   },
   {
-    "id": "color_sunset_orange",
-    "name": "Sunset Pearl Orange",
+    "id": "color_metallic_white",
+    "name": "Metallic White",
+    "price": 400000,
+    "category": "Color",
+    "description": "섬세한 펄 입자가 더해져 깔끔하고 화사한 광택을 선사하는 메탈릭 화이트 컬러입니다.",
+    "colorHex": "#F2F4F7"
+  },
+  {
+    "id": "color_metallic_black",
+    "name": "Metallic Onyx Black",
     "price": 600000,
     "category": "Color",
-    "description": "태양광 각도에 따라 골드 펄이 강조되는 커스텀 오렌지 컬러입니다.",
-    "colorHex": "#FF5722"
+    "description": "조명 각도에 따라 입체적인 메탈릭 하이라이트가 살아나는 오닉스 블랙 컬러입니다.",
+    "colorHex": "#1C1E22"
   },
   {
-    "id": "color_cyber_cyan",
-    "name": "Cyber Neon Cyan",
+    "id": "color_metallic_gold",
+    "name": "Metallic Champagne Gold",
     "price": 800000,
     "category": "Color",
-    "description": "스트리트 튜닝 감성을 살려 야간 주행 시 이목을 끄는 일렉트릭 시안 컬러입니다.",
-    "colorHex": "#00E5FF"
+    "description": "우아하고 독보적인 분위기를 연출하는 커스텀 메탈릭 샴페인 골드 컬러입니다.",
+    "colorHex": "#A89068"
   },
   {
-    "id": "color_matte_slate_grey",
-    "name": "Matte Slate Grey",
-    "price": 1500000,
+    "id": "color_burgundy_red",
+    "name": "Burgundy Crimson Red",
+    "price": 800000,
     "category": "Color",
-    "description": "빛 반사를 억제하여 바디 형태와 굴곡을 강조하는 프리미엄 무광 매트 그레이 도색입니다.",
-    "colorHex": "#4A4E69"
-  },
-  {
-    "id": "color_matte_satin_black",
-    "name": "Matte Satin Black",
-    "price": 1800000,
-    "category": "Color",
-    "description": "스텔스 룩을 완성하는 최고급 사틴 무광 블랙 외장 마감입니다.",
-    "colorHex": "#1C1C1E"
+    "description": "클래식하고 깊이 있는 와인 빛깔로 품격을 높여주는 버건디 레드 컬러입니다.",
+    "colorHex": "#5C282A"
   }
 ]
