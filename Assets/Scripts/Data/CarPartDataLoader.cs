@@ -35,9 +35,7 @@ public static class CarPartDataLoader
             string[] searchPaths = new[]
             {
                 Path.Combine(Application.dataPath, "Data", "CarParts.json"),
-                Path.Combine(Application.dataPath, "Data", "CarParts.json.json"),
-                Path.Combine(Directory.GetCurrentDirectory(), "Assets", "Data", "CarParts.json"),
-                Path.Combine(Directory.GetCurrentDirectory(), "Assets", "Data", "CarParts.json.json")
+                Path.Combine(Directory.GetCurrentDirectory(), "Assets", "Data", "CarParts.json")
             };
 
             foreach (var path in searchPaths)
