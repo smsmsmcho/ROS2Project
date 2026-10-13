@@ -1,55 +1,152 @@
-
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public class CarConfiguratorUIController : MonoBehaviour
 {
-
-
-    [Header("Ä«Å×°í¸® ÆĞ³Î")]
+    [Header("ì¹´í…Œê³ ë¦¬ íŒ¨ë„")]
     [SerializeField] private GameObject colorPanel;
     [SerializeField] private GameObject wheelPanel;
     [SerializeField] private GameObject accessoryPanel;
     [SerializeField] private GameObject aiPanel;
 
-
-
     [Header("Manager")]
     [SerializeField]
     private CarConfiguratorManager manager;
 
-    [Header("¾×¼¼¼­¸® ¿É¼Ç ¹öÆ°")]
+    [Header("ê²¬ì  ë° AI ì±„íŒ… UI (ë¹„ì›Œë‘ë©´ ìë™ íƒìƒ‰)")]
+    [SerializeField]
+    private TMP_Text priceTotalText;
+
+    [SerializeField]
+    private AiChatUIController aiChatUI;
+
+    [Header("ì•¡ì„¸ì„œë¦¬ ì˜µì…˜ ë²„íŠ¼")]
     [SerializeField]
     private List<PartOptionItem> accessoryOptionItems
         = new List<PartOptionItem>();
 
-    [Header("ÈÙ ¿É¼Ç ¹öÆ°")]
+    [Header("íœ  ì˜µì…˜ ë²„íŠ¼")]
     [SerializeField]
     private List<PartOptionItem> wheelOptionItems
         = new List<PartOptionItem>();
 
-    [Header("»ö»ó ¿É¼Ç ¹öÆ°")]
+    [Header("ìƒ‰ìƒ ì˜µì…˜ ë²„íŠ¼")]
     [SerializeField]
     private List<PartOptionItem> colorOptionItems
         = new List<PartOptionItem>();
 
     private PartCategory currentCategory;
 
-    private System.Collections.IEnumerator Start()
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void EnsureControllerInitializedOnPlay()
+    {
+        CarConfiguratorUIController controller =
+            FindAnyObjectByType<CarConfiguratorUIController>(FindObjectsInactive.Include);
+
+        if (controller != null)
+        {
+            if (!controller.enabled)
+            {
+                controller.enabled = true;
+            }
+
+            controller.BindEvents();
+        }
+    }
+
+    private void Awake()
+    {
+        ResolveReferences();
+
+        if (!enabled)
+        {
+            enabled = true;
+        }
+    }
+
+    private void ResolveReferences()
     {
         if (manager == null)
         {
+            manager = FindAnyObjectByType<CarConfiguratorManager>(FindObjectsInactive.Include);
+        }
+
+        if (aiPanel != null)
+        {
+            AiChatUIController panelChatUI = aiPanel.GetComponentInChildren<AiChatUIController>(true);
+            if (panelChatUI != null)
+            {
+                aiChatUI = panelChatUI;
+            }
+        }
+
+        if (aiChatUI == null)
+        {
+            aiChatUI = FindAnyObjectByType<AiChatUIController>(FindObjectsInactive.Include);
+        }
+
+        if (aiPanel == null && aiChatUI != null)
+        {
+            aiPanel = aiChatUI.gameObject;
+        }
+
+        if (priceTotalText == null)
+        {
+            foreach (TMP_Text text in FindObjectsByType<TMP_Text>(FindObjectsInactive.Include))
+            {
+                if (text.name == "PriceTotal")
+                {
+                    priceTotalText = text;
+                    break;
+                }
+            }
+        }
+    }
+
+    private void BindEvents()
+    {
+        ResolveReferences();
+
+        if (manager != null)
+        {
+            manager.OnConfigUpdated -= OnConfigUpdated;
+            manager.OnConfigUpdated += OnConfigUpdated;
+            manager.OnRecommendationFailed -= OnRecommendationFailed;
+            manager.OnRecommendationFailed += OnRecommendationFailed;
+        }
+
+        foreach (AiChatUIController chatUI in FindObjectsByType<AiChatUIController>(FindObjectsInactive.Include))
+        {
+            if (chatUI.gameObject.activeInHierarchy || aiChatUI == null)
+            {
+                aiChatUI = chatUI;
+            }
+
+            chatUI.OnPromptSubmitted -= OnPromptSubmitted;
+            chatUI.OnPromptSubmitted += OnPromptSubmitted;
+        }
+    }
+
+    private System.Collections.IEnumerator Start()
+    {
+        BindEvents();
+
+        if (manager == null)
+        {
             Debug.LogError(
-                "CarConfiguratorManager°¡ ¿¬°áµÇÁö ¾Ê¾Ò½À´Ï´Ù."
+                "CarConfiguratorManagerê°€ ì—°ê²°ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤."
             );
             yield break;
         }
 
-        // ¸Å´ÏÀúÀÇ µ¥ÀÌÅÍ ÃÊ±âÈ­°¡ ³¡³¯ ¶§±îÁö ´ë±â
+        // ë§¤ë‹ˆì €ì˜ ë°ì´í„° ì´ˆê¸°í™”ê°€ ëë‚  ë•Œê¹Œì§€ ëŒ€ê¸°
         yield return new WaitUntil(() => manager.IsInitialized);
 
-        // ÃÊ±âÈ­°¡ ³¡³­ ÈÄ »ö»ó ¿É¼Ç Ç¥½Ã
+        // ì´ˆê¸°í™”ê°€ ëë‚œ í›„ ê¸°ë³¸ ìƒ‰ìƒ íŒ¨ë„ í™œì„±í™”, ì˜µì…˜ ë°”ì¸ë”© ë° ì´ˆê¸° ê²¬ì  í‘œì‹œ
+        ShowPanel(colorPanel);
         OnCategorySelected(PartCategory.Color);
+        OnConfigUpdated(manager.CalculateEstimate());
     }
 
     public void OnCategorySelected(PartCategory category)
@@ -93,12 +190,12 @@ public class CarConfiguratorUIController : MonoBehaviour
         if (options == null)
             options = new List<CarPart>();
 
-        Debug.Log($"ÇöÀç Ä«Å×°í¸®: {currentCategory}");
-        Debug.Log($"¹öÆ° ¼ö: {items.Count}, ¿É¼Ç µ¥ÀÌÅÍ ¼ö: {options.Count}");
+        Debug.Log($"í˜„ì¬ ì¹´í…Œê³ ë¦¬: {currentCategory}");
+        Debug.Log($"ë²„íŠ¼ ìˆ˜: {items.Count}, ì˜µì…˜ ë°ì´í„° ìˆ˜: {options.Count}");
         for (int i = 0; i < items.Count; i++)
         {
             bool hasOption = i < options.Count;
-            
+
             items[i].gameObject.SetActive(hasOption);
 
             if (hasOption)
@@ -107,14 +204,14 @@ public class CarConfiguratorUIController : MonoBehaviour
 
                     items[i].Bind(options[i], this);
             }
-              
+
         }
 
         if (options.Count > items.Count)
         {
             Debug.LogWarning(
-                $"{currentCategory}: µ¥ÀÌÅÍ ¿É¼Ç ¼ö({options.Count})°¡ " +
-                $"¹öÆ° ¼ö({items.Count})º¸´Ù ¸¹½À´Ï´Ù."
+                $"{currentCategory}: ë°ì´í„° ì˜µì…˜ ìˆ˜({options.Count})ê°€ " +
+                $"ë²„íŠ¼ ìˆ˜({items.Count})ë³´ë‹¤ ë§ìŠµë‹ˆë‹¤."
             );
         }
     }
@@ -146,27 +243,69 @@ public class CarConfiguratorUIController : MonoBehaviour
     private async void RequestRecommendation(string prompt)
     {
         if (manager == null)
+        {
+            OnRecommendationFailed("CarConfiguratorManagerê°€ ì—°ê²°ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.");
             return;
+        }
 
         AiRecommendationData data =
             await manager.RequestRecommendationAsync(prompt);
 
-        ShowAiRecommendation(data);
+        if (data != null)
+        {
+            ShowAiRecommendation(data);
+        }
     }
 
     public void ShowAiRecommendation(AiRecommendationData data)
     {
         if (data == null)
         {
-            Debug.LogWarning("AI ÃßÃµ °á°ú°¡ ¾ø½À´Ï´Ù.");
+            Debug.LogWarning("AI ì¶”ì²œ ê²°ê³¼ê°€ ì—†ìŠµë‹ˆë‹¤.");
             return;
         }
 
         Debug.Log(
-            $"AI ÃßÃµ: {data.conceptTitle}\n{data.reasoning}"
+            $"AI ì¶”ì²œ: {data.conceptTitle}\n{data.reasoning}"
         );
 
-        // ½ÇÁ¦ ÃßÃµ Àû¿ëÀº º°µµ UI¿¡¼­ »ç¿ëÀÚ°¡ °áÁ¤ÇÏµµ·Ï µÓ´Ï´Ù.
+        string reply = !string.IsNullOrWhiteSpace(data.reasoning)
+            ? (!string.IsNullOrWhiteSpace(data.conceptTitle)
+                ? $"[{data.conceptTitle}]\n{data.reasoning}"
+                : data.reasoning)
+            : "ì¶”ì²œ êµ¬ì„±ì´ ì°¨ëŸ‰ì— ì ìš©ë˜ì—ˆìŠµë‹ˆë‹¤.";
+
+        bool notified = false;
+        foreach (AiChatUIController chatUI in FindObjectsByType<AiChatUIController>(FindObjectsInactive.Exclude))
+        {
+            chatUI.ShowAiResponse(reply);
+            notified = true;
+        }
+
+        if (!notified)
+        {
+            aiChatUI?.ShowAiResponse(reply);
+        }
+
+        if (manager != null && data.partIds != null && data.partIds.Count > 0)
+        {
+            manager.ApplyAiRecommendation(data);
+        }
+    }
+
+    private void OnRecommendationFailed(string errorMessage)
+    {
+        bool notified = false;
+        foreach (AiChatUIController chatUI in FindObjectsByType<AiChatUIController>(FindObjectsInactive.Exclude))
+        {
+            chatUI.ShowErrorMessage(errorMessage);
+            notified = true;
+        }
+
+        if (!notified)
+        {
+            aiChatUI?.ShowErrorMessage(errorMessage);
+        }
     }
 
     public void OnConfigUpdated(EstimateData data)
@@ -174,22 +313,34 @@ public class CarConfiguratorUIController : MonoBehaviour
         if (data == null)
             return;
 
-        Debug.Log($"ÇöÀç °ßÀû: {data.totalPrice:N0}¿ø");
+        if (priceTotalText != null)
+        {
+            priceTotalText.text = $"Total: {data.totalPrice:N0}ì›";
+        }
+
+        Debug.Log($"í˜„ì¬ ê²¬ì : {data.totalPrice:N0}ì›");
     }
 
     private void OnEnable()
     {
-        if (manager != null)
-            manager.OnConfigUpdated += OnConfigUpdated;
+        BindEvents();
     }
 
     private void OnDisable()
     {
         if (manager != null)
+        {
             manager.OnConfigUpdated -= OnConfigUpdated;
+            manager.OnRecommendationFailed -= OnRecommendationFailed;
+        }
+
+        if (aiChatUI != null)
+        {
+            aiChatUI.OnPromptSubmitted -= OnPromptSubmitted;
+        }
     }
 
-    // Unity ButtonÀÇ OnClick ÀÌº¥Æ®¿¡ ¿¬°áÇÏ±â À§ÇÑ ÇÔ¼öµé
+    // Unity Buttonì˜ OnClick ì´ë²¤íŠ¸ì— ì—°ê²°í•˜ê¸° ìœ„í•œ í•¨ìˆ˜ë“¤
     public void OnAccessoryCategoryClicked()
     {
         ShowPanel(accessoryPanel);
@@ -206,5 +357,16 @@ public class CarConfiguratorUIController : MonoBehaviour
     {
         ShowPanel(colorPanel);
         OnCategorySelected(PartCategory.Color);
+    }
+
+    public void OnAiCategoryClicked()
+    {
+        if (!enabled)
+        {
+            enabled = true;
+        }
+
+        ShowPanel(aiPanel);
+        BindEvents();
     }
 }
