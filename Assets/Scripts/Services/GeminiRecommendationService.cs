@@ -14,7 +14,13 @@ using UnityEngine;
 /// </summary>
 public class GeminiRecommendationService : IAiRecommendationService
 {
-    private static readonly HttpClient HttpClient = new HttpClient();
+    private static readonly HttpClient HttpClient = new HttpClient
+    {
+        Timeout = TimeSpan.FromSeconds(15)
+    };
+
+    // 503(과부하) / 429(요청 한도 초과) 발생 시 재시도 대기 간격 (1초, 2초 - 최대 2회 재시도, 총 3회 요청)
+    private static readonly int[] RetryDelaysMs = { 1000, 2000 };
 
     // 민감한 보안 정보이므로 외부에 프로퍼티로 노출하지 않고 내부에서만 캡슐화
     private readonly string apiKey;
@@ -31,12 +37,13 @@ public class GeminiRecommendationService : IAiRecommendationService
 
     /// <summary>
     /// 사용자 프롬프트와 파츠 목록을 기반으로 Gemini API에 구조화된 JSON 추천을 요청합니다.
+    /// 503/429 응답 시 1초, 2초 간격으로 재시도합니다.
     /// </summary>
     public async Task<AiRecommendationData> RequestRecommendationAsync(string prompt, List<CarPart> availableParts)
     {
         if (string.IsNullOrEmpty(apiKey))
         {
-            throw new InvalidOperationException("Gemini API Key가 설정되지 않았습니다. Assets/Config/config.json을 확인하세요.");
+            throw new InvalidOperationException("Gemini API Key가 설정되지 않았습니다. Assets/StreamingAssets/Config/config.json을 확인하세요.");
         }
 
         if (availableParts == null || availableParts.Count == 0)
@@ -46,22 +53,36 @@ public class GeminiRecommendationService : IAiRecommendationService
 
         string payload = BuildStructuredRequestPayload(prompt, availableParts);
 
-        using (var content = new StringContent(payload, Encoding.UTF8, "application/json"))
+        for (int attempt = 0; ; attempt++)
         {
-            HttpResponseMessage response = await HttpClient.PostAsync(Endpoint, content);
-            string rawResponse = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
+            using (var content = new StringContent(payload, Encoding.UTF8, "application/json"))
+            using (HttpResponseMessage response = await HttpClient.PostAsync(Endpoint, content))
             {
-                throw new HttpRequestException($"Gemini API 호출 실패 (HTTP {(int)response.StatusCode}):\n{rawResponse}");
-            }
+                string rawResponse = await response.Content.ReadAsStringAsync();
 
-            return ParseStructuredResponse(rawResponse, availableParts);
+                if (response.IsSuccessStatusCode)
+                {
+                    return ParseStructuredResponse(rawResponse, availableParts);
+                }
+
+                int statusCode = (int)response.StatusCode;
+                bool isRetryable = (statusCode == 503 || statusCode == 429);
+
+                if (isRetryable && attempt < RetryDelaysMs.Length)
+                {
+                    int delayMs = RetryDelaysMs[attempt];
+                    Debug.LogWarning($"[{nameof(GeminiRecommendationService)}] Gemini API 일시적 오류 (HTTP {statusCode}). {delayMs / 1000}초 후 재시도합니다... ({attempt + 1}/{RetryDelaysMs.Length})");
+                    await Task.Delay(delayMs);
+                    continue;
+                }
+
+                throw new HttpRequestException($"Gemini API 호출 실패 (HTTP {statusCode}):\n{rawResponse}");
+            }
         }
     }
 
     /// <summary>
-    /// responseSchema를 포함하여 AiRecommendationData 규격을 100% 강제하는 요청 JSON 본문을 생성합니다.
+    /// responseSchema를 포함하여 카테고리별 단일 파츠 선택(enum 제약)을 강제하는 요청 JSON 본문을 생성합니다.
     /// </summary>
     private string BuildStructuredRequestPayload(string userPrompt, List<CarPart> availableParts)
     {
@@ -73,8 +94,8 @@ public class GeminiRecommendationService : IAiRecommendationService
 
         string systemInstruction =
             "당신은 전문 자동차 스타일링 및 커스텀 튜닝 컨설턴트 AI입니다.\n" +
-            "사용자의 요구사항을 분석하여 제공된 파츠 목록 중에서 최적의 조합(Trim 1개, Wheel 1개, Color 1개)을 추천하세요.\n" +
-            "규칙: 반드시 제공된 파츠 목록에 존재하는 ID만 partIds에 포함해야 합니다.";
+            "사용자의 요구사항을 분석하여 제공된 파츠 목록 중에서 최적의 조합(Accessory 1개, Wheel 1개, Color 1개)을 추천하세요.\n" +
+            "규칙: 반드시 제공된 파츠 목록에 존재하는 ID만 accessoryId, wheelId, colorId 필드에 각각 1개씩 지정해야 합니다.";
 
         string userContent = $"[선택 가능한 파츠 목록]\n{partsTextBuilder}\n\n[사용자 요청]\n{userPrompt}";
         string combinedPrompt = $"{systemInstruction}\n\n{userContent}";
@@ -82,7 +103,16 @@ public class GeminiRecommendationService : IAiRecommendationService
         // 단순 문자열을 완벽한 JSON 문자열 리터럴로 직렬화 ("..." 형태)
         string jsonEncodedPrompt = ToJsonStringLiteral(combinedPrompt);
 
-        // responseSchema(Structured Outputs)를 통해 AiRecommendationData 구조를 서버 레벨에서 강제
+        // 카테고리별 허용 ID 목록(enum) 구성
+        var accessoryIds = availableParts.Where(p => p.category == PartCategory.Accessory).Select(p => p.id).ToList();
+        var wheelIds = availableParts.Where(p => p.category == PartCategory.Wheel).Select(p => p.id).ToList();
+        var colorIds = availableParts.Where(p => p.category == PartCategory.Color).Select(p => p.id).ToList();
+
+        string accessorySchema = BuildEnumPropertyJson(accessoryIds);
+        string wheelSchema = BuildEnumPropertyJson(wheelIds);
+        string colorSchema = BuildEnumPropertyJson(colorIds);
+
+        // responseSchema(Structured Outputs)를 통해 카테고리별 1개 ID 및 enum 제약을 강제
         string requestJson = $@"{{
   ""contents"": [
     {{
@@ -99,17 +129,27 @@ public class GeminiRecommendationService : IAiRecommendationService
       ""properties"": {{
         ""conceptTitle"": {{ ""type"": ""STRING"" }},
         ""reasoning"": {{ ""type"": ""STRING"" }},
-        ""partIds"": {{
-          ""type"": ""ARRAY"",
-          ""items"": {{ ""type"": ""STRING"" }}
-        }}
+        ""accessoryId"": {accessorySchema},
+        ""wheelId"": {wheelSchema},
+        ""colorId"": {colorSchema}
       }},
-      ""required"": [""conceptTitle"", ""reasoning"", ""partIds""]
+      ""required"": [""conceptTitle"", ""reasoning"", ""accessoryId"", ""wheelId"", ""colorId""]
     }}
   }}
 }}";
 
         return requestJson;
+    }
+
+    private static string BuildEnumPropertyJson(List<string> allowedIds)
+    {
+        if (allowedIds == null || allowedIds.Count == 0)
+        {
+            return @"{ ""type"": ""STRING"" }";
+        }
+
+        string enumItems = string.Join(", ", allowedIds.Select(ToJsonStringLiteral));
+        return $@"{{ ""type"": ""STRING"", ""enum"": [{enumItems}] }}";
     }
 
     /// <summary>
@@ -123,30 +163,33 @@ public class GeminiRecommendationService : IAiRecommendationService
             throw new Exception("Gemini 응답에 candidates가 없습니다: " + rawResponse);
         }
 
-        string text = res.candidates[0]?.content?.parts?[0]?.text;
+        ResponsePart[] parts = res.candidates[0]?.content?.parts;
+        if (parts == null || parts.Length == 0)
+        {
+            throw new Exception("Gemini 응답에 parts가 없습니다: " + rawResponse);
+        }
+
+        string text = parts[0]?.text;
         if (string.IsNullOrEmpty(text))
         {
             throw new Exception("Gemini 응답에 본문 텍스트가 없습니다: " + rawResponse);
         }
 
-        AiRecommendationData data = JsonUtility.FromJson<AiRecommendationData>(text.Trim());
-        if (data == null)
+        StructuredRecommendationDto dto = JsonUtility.FromJson<StructuredRecommendationDto>(text.Trim());
+        if (dto == null)
         {
             throw new Exception("AiRecommendationData 역직렬화 실패: " + text);
         }
 
-        // 혹시 모를 존재하지 않는 ID 필터링 (데이터 정합성 보장)
         var validIds = new HashSet<string>(availableParts.Select(p => p.id));
-        if (data.partIds != null)
-        {
-            data.partIds = data.partIds.Where(id => validIds.Contains(id)).ToList();
-        }
-        else
-        {
-            data.partIds = new List<string>();
-        }
+        var selectedIds = new[] { dto.accessoryId, dto.wheelId, dto.colorId };
 
-        return data;
+        return new AiRecommendationData
+        {
+            conceptTitle = dto.conceptTitle,
+            reasoning = dto.reasoning,
+            partIds = selectedIds.Where(id => !string.IsNullOrEmpty(id) && validIds.Contains(id)).ToList()
+        };
     }
 
     /// <summary>
@@ -189,29 +232,22 @@ public class GeminiRecommendationService : IAiRecommendationService
 
     private static string LoadApiKeyFromConfig()
     {
-        string[] searchPaths = new[]
-        {
-            Path.Combine(Application.dataPath, "Config", "config.json"),
-            Path.Combine(Directory.GetCurrentDirectory(), "Assets", "Config", "config.json")
-        };
+        string path = Path.Combine(Application.streamingAssetsPath, "Config", "config.json");
 
-        foreach (var path in searchPaths)
+        if (File.Exists(path))
         {
-            if (File.Exists(path))
+            try
             {
-                try
+                string json = File.ReadAllText(path);
+                ConfigData cfg = JsonUtility.FromJson<ConfigData>(json);
+                if (!string.IsNullOrEmpty(cfg?.apiKey))
                 {
-                    string json = File.ReadAllText(path);
-                    ConfigData cfg = JsonUtility.FromJson<ConfigData>(json);
-                    if (!string.IsNullOrEmpty(cfg?.apiKey))
-                    {
-                        return cfg.apiKey;
-                    }
+                    return cfg.apiKey;
                 }
-                catch (Exception ex)
-                {
-                    Debug.LogWarning($"[GeminiRecommendationService] config.json 읽기 실패: {ex.Message}");
-                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[GeminiRecommendationService] config.json 읽기 실패: {ex.Message}");
             }
         }
 
@@ -251,12 +287,25 @@ public class GeminiRecommendationService : IAiRecommendationService
     // =========================================================================================
 
     /// <summary>
-    /// Assets/Config/config.json의 apiKey 필드를 읽기 위한 1회용 설정 DTO
+    /// Assets/StreamingAssets/Config/config.json의 apiKey 필드를 읽기 위한 1회용 설정 DTO
     /// </summary>
     [Serializable]
     private class ConfigData
     {
         public string apiKey;
+    }
+
+    /// <summary>
+    /// Gemini responseSchema(accessoryId, wheelId, colorId 분리 구조) 역직렬화용 내부 DTO
+    /// </summary>
+    [Serializable]
+    private class StructuredRecommendationDto
+    {
+        public string conceptTitle;
+        public string reasoning;
+        public string accessoryId;
+        public string wheelId;
+        public string colorId;
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -22,7 +23,7 @@ public class CarConfiguratorManager : MonoBehaviour
     [SerializeField] private int baseVehiclePrice = 35000000;
 
     // AI 파츠 추천 서비스
-    private IAiRecommendationService aiService = new GeminiRecommendationService();
+    private IAiRecommendationService aiService;
 
     // 씬 내 중복 생성 방지를 위한 내부 가드 (외부 노출 없음)
     private static CarConfiguratorManager activeInstance;
@@ -31,6 +32,11 @@ public class CarConfiguratorManager : MonoBehaviour
     /// 견적 및 선택 파츠 설정이 갱신되었을 때 발생하는 이벤트
     /// </summary>
     public event Action<EstimateData> OnConfigUpdated;
+
+    /// <summary>
+    /// AI 추천 요청 실패 또는 추천 파츠 적용 실패 시 UI에 안내 메시지를 전달하는 이벤트
+    /// </summary>
+    public event Action<string> OnRecommendationFailed;
 
     private void Awake()
     {
@@ -41,6 +47,7 @@ public class CarConfiguratorManager : MonoBehaviour
             return;
         }
         activeInstance = this;
+        aiService = new GeminiRecommendationService();
     }
 
     private void OnDestroy()
@@ -109,6 +116,8 @@ public class CarConfiguratorManager : MonoBehaviour
 
     /// <summary>
     /// 사용자 프롬프트와 현재 사용 가능한 파츠 목록을 기반으로 AI 추천을 요청합니다.
+    /// 실패 시 예외 종류(API 키 누락, 타임아웃, 503/429 서버 과부하, 네트워크 오류 등)를 구분하여
+    /// OnRecommendationFailed 이벤트로 UI에 안내 메시지를 전달합니다.
     /// </summary>
     public async Task<AiRecommendationData> RequestRecommendationAsync(string prompt)
     {
@@ -116,28 +125,78 @@ public class CarConfiguratorManager : MonoBehaviour
         {
             return await aiService.RequestRecommendationAsync(prompt, GetAllAvailableParts());
         }
+        catch (InvalidOperationException ex)
+        {
+            Debug.LogError($"[{nameof(CarConfiguratorManager)}] AI 추천 요청 실패 (API 키 오류): {ex.Message}");
+            OnRecommendationFailed?.Invoke("API 키가 설정되지 않았습니다. 설정 파일(config.json)을 확인해주세요.");
+            return null;
+        }
+        catch (TaskCanceledException ex)
+        {
+            Debug.LogError($"[{nameof(CarConfiguratorManager)}] AI 추천 요청 실패 (응답 시간 초과): {ex.Message}");
+            OnRecommendationFailed?.Invoke("AI 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.");
+            return null;
+        }
+        catch (HttpRequestException ex)
+        {
+            Debug.LogError($"[{nameof(CarConfiguratorManager)}] AI 추천 요청 실패 (통신 오류): {ex.Message}");
+            string userMessage = (ex.Message.Contains("503") || ex.Message.Contains("429"))
+                ? "현재 AI 서버가 혼잡합니다. 잠시 후 다시 시도해주세요."
+                : "네트워크 통신 오류가 발생했습니다. 인터넷 연결을 확인해주세요.";
+            OnRecommendationFailed?.Invoke(userMessage);
+            return null;
+        }
         catch (Exception ex)
         {
             Debug.LogError($"[{nameof(CarConfiguratorManager)}] AI 추천 요청 실패: {ex.Message}");
+            OnRecommendationFailed?.Invoke("AI 추천을 처리하는 중 오류가 발생했습니다.");
             return null;
         }
     }
 
     /// <summary>
     /// AI 추천 결과(AiRecommendationData)의 partIds를 순회하며 차량에 일괄 적용합니다.
+    /// 동일 카테고리가 중복 수신될 경우 경고를 남기고 덮어쓰기를 방지하며,
+    /// 실제로 적용된 파츠가 0개이면 "추천을 적용하지 못했습니다." 경고 및 이벤트를 발생시킵니다.
     /// </summary>
     public void ApplyAiRecommendation(AiRecommendationData data)
     {
-        if (data?.partIds == null) return;
+        int appliedCount = 0;
 
-        List<CarPart> availableParts = GetAllAvailableParts();
-        foreach (string partId in data.partIds)
+        if (data?.partIds != null)
         {
-            CarPart part = availableParts.FirstOrDefault(p => p.id == partId);
-            if (part != null)
+            List<CarPart> availableParts = GetAllAvailableParts();
+            var appliedCategories = new HashSet<PartCategory>();
+
+            foreach (string partId in data.partIds)
             {
-                GetConfigurator(part.category)?.SelectOption(part);
+                CarPart part = availableParts.FirstOrDefault(p => p.id == partId);
+                if (part == null)
+                {
+                    Debug.LogWarning($"[{nameof(CarConfiguratorManager)}] 추천된 파츠 ID '{partId}'를 찾을 수 없어 건너뜁니다.");
+                    continue;
+                }
+
+                if (!appliedCategories.Add(part.category))
+                {
+                    Debug.LogWarning($"[{nameof(CarConfiguratorManager)}] '{part.category}' 카테고리에 중복 파츠('{part.id}')가 감지되어 덮어쓰기를 건너뜁니다.");
+                    continue;
+                }
+
+                CarPartConfigurator configurator = GetConfigurator(part.category);
+                if (configurator != null)
+                {
+                    configurator.SelectOption(part);
+                    appliedCount++;
+                }
             }
+        }
+
+        if (appliedCount == 0)
+        {
+            Debug.LogWarning($"[{nameof(CarConfiguratorManager)}] 추천을 적용하지 못했습니다.");
+            OnRecommendationFailed?.Invoke("추천을 적용하지 못했습니다.");
+            return;
         }
 
         NotifyConfigUpdated();

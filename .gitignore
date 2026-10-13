@@ -105,3 +105,13 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+Assets/TutorialInfo/Icons/URP.png
+Assets/TutorialInfo/Icons/URP.png.meta
+
+# ==========================================
+# Secret API Configurations
+# ==========================================
+# 실제 키가 포함된 Config 폴더 및 메타 파일 제외
+/[Aa]ssets/[Ss]treaming[Aa]ssets/[Cc]onfig/
+/[Aa]ssets/[Ss]treaming[Aa]ssets/[Cc]onfig.meta

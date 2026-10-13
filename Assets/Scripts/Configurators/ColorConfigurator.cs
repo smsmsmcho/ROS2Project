@@ -21,7 +21,7 @@ public class ColorConfigurator : CarPartConfigurator
         // null 뿐만 아니라 원소가 0개인 빈 리스트도 함께 방어
         if (bodyRenderers == null || bodyRenderers.Count == 0)
         {
-            Debug.LogError($"[{gameObject.name}] ColorConfigurator에 bodyRenderers가 할당되지 않았거나 비어 있습니다. 인스펙터에서 바디 렌더러들을 연결해주세요!");
+            Debug.LogWarning($"[{gameObject.name}] ColorConfigurator에 bodyRenderers가 할당되지 않았거나 비어 있습니다. 인스펙터에서 바디 렌더러들을 연결해주세요!");
             return;
         }
 
