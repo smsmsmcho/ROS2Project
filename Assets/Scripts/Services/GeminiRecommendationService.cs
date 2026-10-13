@@ -22,13 +22,19 @@ public class GeminiRecommendationService : IAiRecommendationService
     // 503(과부하) / 429(요청 한도 초과) 발생 시 재시도 대기 간격 (1초, 2초 - 최대 2회 재시도, 총 3회 요청)
     private static readonly int[] RetryDelaysMs = { 1000, 2000 };
 
+    // 시도 횟수(attempt)별로 순차 폴백할 모델 목록 (1차 주력 -> 2차 경량·고속 -> 3차 최종 경량 폴백)
+    private static readonly string[] FallbackModels =
+    {
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest"
+    };
+
     // 민감한 보안 정보이므로 외부에 프로퍼티로 노출하지 않고 내부에서만 캡슐화
     private readonly string apiKey;
 
-    // gemini-flash-latest는 현재 3.8로 연결되어 503(과부하)이 빈번하므로, 서버가 가장 안정적인 3.5-flash 적용
-    private string modelName = "gemini-3.5-flash";
-
-    private string Endpoint => $"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:generateContent?key={apiKey}";
+    private string GetEndpoint(string modelName) =>
+        $"https://generativelanguage.googleapis.com/v1beta/models/{modelName}:generateContent?key={apiKey}";
 
     public GeminiRecommendationService()
     {
@@ -37,7 +43,7 @@ public class GeminiRecommendationService : IAiRecommendationService
 
     /// <summary>
     /// 사용자 프롬프트와 파츠 목록을 기반으로 Gemini API에 구조화된 JSON 추천을 요청합니다.
-    /// 503/429 응답 시 1초, 2초 간격으로 재시도합니다.
+    /// 503/429 또는 일시적 전송 오류 시 1초, 2초 간격으로 모델을 한 단계씩 경량화하며 재시도합니다.
     /// </summary>
     public async Task<AiRecommendationData> RequestRecommendationAsync(string prompt, List<CarPart> availableParts)
     {
@@ -52,32 +58,48 @@ public class GeminiRecommendationService : IAiRecommendationService
         }
 
         string payload = BuildStructuredRequestPayload(prompt, availableParts);
+        int lastStatusCode = 0;
 
         for (int attempt = 0; ; attempt++)
         {
-            using (var content = new StringContent(payload, Encoding.UTF8, "application/json"))
-            using (HttpResponseMessage response = await HttpClient.PostAsync(Endpoint, content))
+            string currentModel = FallbackModels[Mathf.Min(attempt, FallbackModels.Length - 1)];
+            bool isTransportError = false;
+            string errorDetail;
+
+            try
             {
-                string rawResponse = await response.Content.ReadAsStringAsync();
-
-                if (response.IsSuccessStatusCode)
+                using (var content = new StringContent(payload, Encoding.UTF8, "application/json"))
+                using (HttpResponseMessage response = await HttpClient.PostAsync(GetEndpoint(currentModel), content))
                 {
-                    return ParseStructuredResponse(rawResponse, availableParts);
+                    string rawResponse = await response.Content.ReadAsStringAsync();
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        return ParseStructuredResponse(rawResponse, availableParts);
+                    }
+
+                    lastStatusCode = (int)response.StatusCode;
+                    errorDetail = rawResponse;
                 }
-
-                int statusCode = (int)response.StatusCode;
-                bool isRetryable = (statusCode == 503 || statusCode == 429);
-
-                if (isRetryable && attempt < RetryDelaysMs.Length)
-                {
-                    int delayMs = RetryDelaysMs[attempt];
-                    Debug.LogWarning($"[{nameof(GeminiRecommendationService)}] Gemini API 일시적 오류 (HTTP {statusCode}). {delayMs / 1000}초 후 재시도합니다... ({attempt + 1}/{RetryDelaysMs.Length})");
-                    await Task.Delay(delayMs);
-                    continue;
-                }
-
-                throw new HttpRequestException($"Gemini API 호출 실패 (HTTP {statusCode}):\n{rawResponse}");
             }
+            catch (HttpRequestException ex)
+            {
+                isTransportError = true;
+                errorDetail = ex.Message;
+            }
+
+            bool isRetryable = isTransportError || lastStatusCode == 503 || lastStatusCode == 429;
+            if (isRetryable && attempt < RetryDelaysMs.Length)
+            {
+                int delayMs = RetryDelaysMs[attempt];
+                string nextModel = FallbackModels[Mathf.Min(attempt + 1, FallbackModels.Length - 1)];
+                string reason = isTransportError ? "연결 오류" : $"HTTP {lastStatusCode}";
+                Debug.LogWarning($"[{nameof(GeminiRecommendationService)}] '{currentModel}' 일시적 오류 ({reason}). {delayMs / 1000}초 후 '{nextModel}' 모델로 낮춰 재시도합니다... ({attempt + 1}/{RetryDelaysMs.Length})");
+                await Task.Delay(delayMs);
+                continue;
+            }
+
+            throw new HttpRequestException($"Gemini API 호출 실패 (HTTP {lastStatusCode}, model: {currentModel}):\n{errorDetail}");
         }
     }
 
@@ -95,7 +117,8 @@ public class GeminiRecommendationService : IAiRecommendationService
         string systemInstruction =
             "당신은 전문 자동차 스타일링 및 커스텀 튜닝 컨설턴트 AI입니다.\n" +
             "사용자의 요구사항을 분석하여 제공된 파츠 목록 중에서 최적의 조합(Accessory 1개, Wheel 1개, Color 1개)을 추천하세요.\n" +
-            "규칙: 반드시 제공된 파츠 목록에 존재하는 ID만 accessoryId, wheelId, colorId 필드에 각각 1개씩 지정해야 합니다.";
+            "규칙 1: 추천 시 반드시 제공된 파츠 목록에 존재하는 ID만 accessoryId, wheelId, colorId 필드에 각각 1개씩 지정해야 합니다.\n" +
+            "규칙 2: 만약 사용자의 입력이 차량 스타일링·분위기·색상·튜닝·드라이브 추천과 전혀 무관한 질문이라면, accessoryId, wheelId, colorId를 모두 \"NONE\"으로 지정하고, conceptTitle은 빈 문자열(\"\")로 둔 뒤 reasoning에 차량 커스터마이징 관련 질문을 해달라고 친절하게 안내하세요.";
 
         string userContent = $"[선택 가능한 파츠 목록]\n{partsTextBuilder}\n\n[사용자 요청]\n{userPrompt}";
         string combinedPrompt = $"{systemInstruction}\n\n{userContent}";
@@ -148,7 +171,8 @@ public class GeminiRecommendationService : IAiRecommendationService
             return @"{ ""type"": ""STRING"" }";
         }
 
-        string enumItems = string.Join(", ", allowedIds.Select(ToJsonStringLiteral));
+        var enumValues = new List<string>(allowedIds) { "NONE" };
+        string enumItems = string.Join(", ", enumValues.Select(ToJsonStringLiteral));
         return $@"{{ ""type"": ""STRING"", ""enum"": [{enumItems}] }}";
     }
 
@@ -186,7 +210,7 @@ public class GeminiRecommendationService : IAiRecommendationService
 
         return new AiRecommendationData
         {
-            conceptTitle = dto.conceptTitle,
+            conceptTitle = dto.conceptTitle == "NONE" ? string.Empty : dto.conceptTitle,
             reasoning = dto.reasoning,
             partIds = selectedIds.Where(id => !string.IsNullOrEmpty(id) && validIds.Contains(id)).ToList()
         };
