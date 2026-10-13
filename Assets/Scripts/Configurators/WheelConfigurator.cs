@@ -1,21 +1,21 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
 public class WheelConfigurator : MonoBehaviour
 {
-    [Header("Å¸ÀÌ¾î ¸ğµ¨ ºÎ¸ğ")]
+    [Header("íƒ€ì´ì–´ ëª¨ë¸ ë¶€ëª¨")]
     [SerializeField] private Transform tireParent;
 
     public void SelectTire(int index)
     {
         if (tireParent == null)
         {
-            Debug.LogWarning("Lab_Tires_MD°¡ ¿¬°áµÇÁö ¾Ê¾Ò½À´Ï´Ù.");
+            Debug.LogWarning("Lab_Tires_MDê°€ ì—°ê²°ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.");
             return;
         }
 
         if (index < 0 || index >= tireParent.childCount)
         {
-            Debug.LogWarning("Àß¸øµÈ Å¸ÀÌ¾î ÀÎµ¦½ºÀÔ´Ï´Ù.");
+            Debug.LogWarning("ì˜ëª»ëœ íƒ€ì´ì–´ ì¸ë±ìŠ¤ì…ë‹ˆë‹¤.");
             return;
         }
 
@@ -24,6 +24,6 @@ public class WheelConfigurator : MonoBehaviour
             tireParent.GetChild(i).gameObject.SetActive(i == index);
         }
 
-        Debug.Log($"Å¸ÀÌ¾î ¸ğµ¨ º¯°æ: {tireParent.GetChild(index).name}");
+        Debug.Log($"íƒ€ì´ì–´ ëª¨ë¸ ë³€ê²½: {tireParent.GetChild(index).name}");
     }
 }

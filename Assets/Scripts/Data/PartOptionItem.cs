@@ -1,4 +1,4 @@
-
+ï»¿
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -23,7 +23,7 @@ public class PartOptionItem : MonoBehaviour
         if (button == null)
         {
             Debug.LogError(
-                $"{gameObject.name}: Button ÄÄÆ÷³ÍÆ®¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù."
+                $"{gameObject.name}: Button ì»´í¬ë„ŒíŠ¸ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤."
             );
             return;
         }
@@ -34,11 +34,11 @@ public class PartOptionItem : MonoBehaviour
 
     public void OnClicked()
     {
-        Debug.Log($"¹öÆ° Å¬¸¯µÊ{gameObject.name}");
+        Debug.Log($"ë²„íŠ¼ í´ë¦­ë¨{gameObject.name}");
         if (part == null)
         {
             Debug.LogWarning(
-                $"{gameObject.name}: ¿¬°áµÈ CarPart°¡ ¾ø½À´Ï´Ù."
+                $"{gameObject.name}: ì—°ê²°ëœ CarPartê°€ ì—†ìŠµë‹ˆë‹¤."
             );
             return;
         }
