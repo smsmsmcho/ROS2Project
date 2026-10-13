@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,26 +8,32 @@ using UnityEngine;
 
 /// <summary>
 /// 차량 커스터마이징 시스템의 조율자.
-/// 파츠 설정기(Accessory, Wheel, Color)와 AI 추천 서비스를 중재하고,
-/// 파츠 적용 및 견적 계산, UI 통지 이벤트를 총괄합니다.
+/// 액세서리, 휠, 색상 설정과 AI 추천 및 견적 계산을 관리합니다.
 /// </summary>
 [DisallowMultipleComponent]
 public class CarConfiguratorManager : MonoBehaviour
 {
-    [Header("카테고리별 컨피규레이터 컴포넌트")]
+    public bool IsInitialized { get; private set; } = false;
+    [Header("카테고리별 컨피규레이터")]
     [SerializeField] private CarPartConfigurator accessoryConfigurator;
-    [SerializeField] private CarPartConfigurator wheelConfigurator;
     [SerializeField] private ColorConfigurator colorConfigurator;
+    [SerializeField] private WheelConfigurator wheelModelConfigurator;
 
     [Header("기본 차량 설정")]
-    [Tooltip("기본 차량 가격 (트림 단일화에 따른 기본 차체 가격)")]
     [SerializeField] private int baseVehiclePrice = 35000000;
 
-    // AI 파츠 추천 서비스
-    private IAiRecommendationService aiService;
+    // JSON에서 읽은 휠 옵션
+    private List<CarPart> wheelOptions = new List<CarPart>();
 
-    // 씬 내 중복 생성 방지를 위한 내부 가드 (외부 노출 없음)
+    // 현재 선택한 휠
+    private CarPart selectedWheel;
+
+    private IAiRecommendationService aiService =
+        new GeminiRecommendationService();
+
     private static CarConfiguratorManager activeInstance;
+
+    public event Action<EstimateData> OnConfigUpdated;
 
     /// <summary>
     /// 견적 및 선택 파츠 설정이 갱신되었을 때 발생하는 이벤트
@@ -42,10 +49,15 @@ public class CarConfiguratorManager : MonoBehaviour
     {
         if (activeInstance != null && activeInstance != this)
         {
-            Debug.LogError($"[{nameof(CarConfiguratorManager)}] 씬에 이미 매니저가 존재합니다! 중복 컴포넌트를 파괴합니다: {gameObject.name}");
+            Debug.LogError(
+                $"[{nameof(CarConfiguratorManager)}] " +
+                $"중복 매니저를 제거합니다: {gameObject.name}"
+            );
+
             Destroy(this);
             return;
         }
+
         activeInstance = this;
         aiService = new GeminiRecommendationService();
     }
@@ -53,9 +65,7 @@ public class CarConfiguratorManager : MonoBehaviour
     private void OnDestroy()
     {
         if (activeInstance == this)
-        {
             activeInstance = null;
-        }
     }
 
     private void Start()
@@ -67,63 +77,190 @@ public class CarConfiguratorManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogWarning($"[{nameof(CarConfiguratorManager)}] CarParts 데이터 로드 실패: {ex.Message}");
+            Debug.LogWarning(
+                $"[{nameof(CarConfiguratorManager)}] " +
+                $"CarParts 데이터 로드 실패: {ex.Message}"
+            );
         }
     }
 
     /// <summary>
-    /// 파츠 목록을 주입받아 카테고리별 컨피규레이터를 초기화하고 초기 견적을 알립니다.
+    /// JSON 데이터를 카테고리별로 초기화합니다.
     /// </summary>
     public void Initialize(List<CarPart> parts)
     {
-        if (parts == null) return;
+        if (parts == null)
+            return;
 
         if (accessoryConfigurator != null)
-            accessoryConfigurator.Initialize(parts.Where(p => p.category == PartCategory.Accessory).ToList());
+        {
+            accessoryConfigurator.Initialize(
+                parts.Where(p => p.category == PartCategory.Accessory)
+                     .ToList()
+            );
+        }
 
-        if (wheelConfigurator != null)
-            wheelConfigurator.Initialize(parts.Where(p => p.category == PartCategory.Wheel).ToList());
+        // 휠은 CarPartConfigurator가 아니라 별도 WheelConfigurator가 처리
+        wheelOptions = parts
+            .Where(p => p.category == PartCategory.Wheel)
+            .ToList();
 
         if (colorConfigurator != null)
-            colorConfigurator.Initialize(parts.Where(p => p.category == PartCategory.Color).ToList());
+        {
+            colorConfigurator.Initialize(
+                parts.Where(p => p.category == PartCategory.Color)
+                     .ToList()
+            );
+        }
+
+        // 첫 번째 휠을 기본 선택
+        if (wheelOptions.Count > 0 && wheelModelConfigurator != null)
+        {
+            selectedWheel = wheelOptions[0];
+            wheelModelConfigurator.SelectTire(
+                GetWheelIndex(selectedWheel.id)
+            );
+        }
 
         NotifyConfigUpdated();
+        IsInitialized = true;
     }
 
     /// <summary>
-    /// 특정 카테고리에서 선택 가능한 전체 CarPart 옵션 목록을 반환합니다.
+    /// 카테고리별 옵션 목록을 반환합니다.
     /// </summary>
     public List<CarPart> GetOptions(PartCategory category)
     {
-        return GetConfigurator(category)?.GetOptions() ?? new List<CarPart>();
+        switch (category)
+        {
+            case PartCategory.Accessory:
+                return accessoryConfigurator != null
+                    ? accessoryConfigurator.GetOptions()
+                    : new List<CarPart>();
+
+            case PartCategory.Wheel:
+                return wheelOptions;
+
+            case PartCategory.Color:
+                return colorConfigurator != null
+                    ? colorConfigurator.GetOptions()
+                    : new List<CarPart>();
+
+            default:
+                return new List<CarPart>();
+        }
     }
 
     /// <summary>
-    /// 파츠 ID(partId)로 단일 파츠를 찾아 해당 카테고리의 컨피규레이터에 적용하고, 견적을 재계산하여 알립니다.
+    /// 파츠 ID를 기준으로 해당 파츠를 적용합니다.
     /// </summary>
     public void ApplyPart(string partId)
     {
-        CarPart part = GetAllAvailableParts().FirstOrDefault(p => p.id == partId);
+
+        CarPart part = GetAllAvailableParts()
+            .FirstOrDefault(p => p.id == partId);
+
         if (part == null)
         {
-            Debug.LogWarning($"[{nameof(CarConfiguratorManager)}] 적용하려는 CarPart를 찾을 수 없습니다. (partId: {partId})");
+            Debug.LogWarning(
+                $"[{nameof(CarConfiguratorManager)}] " +
+                $"파츠를 찾을 수 없습니다: {partId}"
+            );
             return;
         }
 
-        GetConfigurator(part.category)?.SelectOption(part);
+        if (part.category == PartCategory.Wheel)
+        {
+            SelectWheelById(part);
+        }
+        else
+        {
+            GetConfigurator(part.category)?.SelectOption(part);
+        }
+
         NotifyConfigUpdated();
     }
 
     /// <summary>
-    /// 사용자 프롬프트와 현재 사용 가능한 파츠 목록을 기반으로 AI 추천을 요청합니다.
-    /// 실패 시 예외 종류(API 키 누락, 타임아웃, 503/429 서버 과부하, 네트워크 오류 등)를 구분하여
-    /// OnRecommendationFailed 이벤트로 UI에 안내 메시지를 전달합니다.
+    /// 휠 ID로 모델을 선택합니다.
     /// </summary>
-    public async Task<AiRecommendationData> RequestRecommendationAsync(string prompt)
+    private void SelectWheelById(CarPart part)
+    {
+        if (wheelModelConfigurator == null)
+        {
+            Debug.LogWarning(
+                "WheelConfigurator가 연결되지 않았습니다."
+            );
+            return;
+        }
+
+        int index = GetWheelIndex(part.id);
+
+        if (index < 0 || index >= wheelOptions.Count)
+        {
+            Debug.LogWarning(
+                $"휠 ID에 대응하는 모델이 없습니다: {part.id}"
+            );
+            return;
+        }
+
+        wheelModelConfigurator.SelectTire(index);
+        selectedWheel = part;
+
+        Debug.Log($"휠 선택: {part.name} ({part.id})");
+    }
+
+    /// <summary>
+    /// JSON 휠 ID를 모델 인덱스로 변환합니다.
+    /// </summary>
+    private int GetWheelIndex(string wheelId)
+    {
+        switch (wheelId)
+        {
+            case "wheel_std_twin5_spoke":
+                return 0;
+
+            case "wheel_split_v5_spoke":
+                return 1;
+
+            case "wheel_multi_fin_spoke":
+                return 2;
+
+            case "wheel_mesh_y_forged":
+                return 3;
+
+            default:
+                return -1;
+        }
+    }
+
+    public async Task<AiRecommendationData> RequestRecommendationAsync(
+        string prompt)
     {
         try
         {
             return await aiService.RequestRecommendationAsync(prompt, GetAllAvailableParts());
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.LogError($"[{nameof(CarConfiguratorManager)}] AI 추천 요청 실패 (API 키 오류): {ex.Message}");
+            OnRecommendationFailed?.Invoke("API 키가 설정되지 않았습니다. 설정 파일(config.json)을 확인해주세요.");
+            return null;
+        }
+        catch (TaskCanceledException ex)
+        {
+            Debug.LogError($"[{nameof(CarConfiguratorManager)}] AI 추천 요청 실패 (응답 시간 초과): {ex.Message}");
+            OnRecommendationFailed?.Invoke("AI 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.");
+            return null;
+        }
+        catch (HttpRequestException ex)
+        {
+            Debug.LogError($"[{nameof(CarConfiguratorManager)}] AI 추천 요청 실패 (통신 오류): {ex.Message}");
+            string userMessage = (ex.Message.Contains("503") || ex.Message.Contains("429"))
+                ? "현재 AI 서버가 혼잡합니다. 잠시 후 다시 시도해주세요."
+                : "네트워크 통신 오류가 발생했습니다. 인터넷 연결을 확인해주세요.";
+            OnRecommendationFailed?.Invoke(userMessage);
+            return null;
         }
         catch (InvalidOperationException ex)
         {
@@ -203,51 +340,97 @@ public class CarConfiguratorManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 각 컨피규레이터에서 선택된 파츠들을 취합하여 총 견적 및 상세 목록을 계산합니다.
+    /// 현재 선택한 파츠들의 견적을 계산합니다.
     /// </summary>
     public EstimateData CalculateEstimate()
     {
-        var configurators = new CarPartConfigurator[] { accessoryConfigurator, wheelConfigurator, colorConfigurator };
-        var selectedParts = configurators.Where(c => c != null)
-                                         .Select(c => c.GetSelectedPart())
-                                         .Where(p => p != null)
-                                         .ToList();
+        var selectedParts = new List<CarPart>();
+
+        if (accessoryConfigurator != null)
+        {
+            CarPart accessory =
+                accessoryConfigurator.GetSelectedPart();
+
+            if (accessory != null)
+                selectedParts.Add(accessory);
+        }
+
+        if (selectedWheel != null)
+            selectedParts.Add(selectedWheel);
+
+        if (colorConfigurator != null)
+        {
+            CarPart color = colorConfigurator.GetSelectedPart();
+
+            if (color != null)
+                selectedParts.Add(color);
+        }
 
         return new EstimateData
         {
-            totalPrice = baseVehiclePrice + selectedParts.Sum(p => p.price),
+            totalPrice =
+                baseVehiclePrice + selectedParts.Sum(p => p.price),
             details = selectedParts
         };
     }
 
     /// <summary>
-    /// 카테고리에 해당하는 컨피규레이터를 반환합니다.
+    /// 기존 파츠 컨피규레이터를 반환합니다.
+    /// 휠은 별도 WheelConfigurator가 담당합니다.
     /// </summary>
-    private CarPartConfigurator GetConfigurator(PartCategory category) => category switch
+    private CarPartConfigurator GetConfigurator(
+        PartCategory category)
     {
-        PartCategory.Accessory => accessoryConfigurator,
-        PartCategory.Wheel => wheelConfigurator,
-        PartCategory.Color => colorConfigurator,
-        _ => null
-    };
+        switch (category)
+        {
+            case PartCategory.Accessory:
+                return accessoryConfigurator;
+
+            case PartCategory.Color:
+                return colorConfigurator;
+
+            default:
+                return null;
+        }
+    }
 
     /// <summary>
-    /// 전체 컨피규레이터에서 제공하는 모든 CarPart 목록을 수집하여 반환합니다.
+    /// 모든 카테고리의 파츠 목록을 반환합니다.
     /// </summary>
     private List<CarPart> GetAllAvailableParts()
     {
         var allParts = new List<CarPart>();
-        if (accessoryConfigurator != null) allParts.AddRange(accessoryConfigurator.GetOptions());
-        if (wheelConfigurator != null) allParts.AddRange(wheelConfigurator.GetOptions());
-        if (colorConfigurator != null) allParts.AddRange(colorConfigurator.GetOptions());
+
+        if (accessoryConfigurator != null)
+            allParts.AddRange(accessoryConfigurator.GetOptions());
+
+        allParts.AddRange(wheelOptions);
+
+        if (colorConfigurator != null)
+            allParts.AddRange(colorConfigurator.GetOptions());
+
         return allParts;
     }
 
-    /// <summary>
-    /// 견적을 갱신하고 OnConfigUpdated 이벤트를 통지합니다.
-    /// </summary>
     private void NotifyConfigUpdated()
     {
         OnConfigUpdated?.Invoke(CalculateEstimate());
+    }
+
+    /// <summary>
+    /// UI에서 휠 인덱스로 직접 선택할 때 사용합니다.
+    /// </summary>
+    public void SelectWheelModel(int index)
+    {
+        if (index < 0 || index >= wheelOptions.Count)
+        {
+            Debug.LogWarning(
+                $"잘못된 휠 옵션 인덱스입니다: {index}"
+            );
+            return;
+        }
+
+        SelectWheelById(wheelOptions[index]);
+        NotifyConfigUpdated();
     }
 }
