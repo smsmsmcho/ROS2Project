@@ -28,12 +28,9 @@ public class CarConfiguratorManager : MonoBehaviour
     // 현재 선택한 휠
     private CarPart selectedWheel;
 
-    private IAiRecommendationService aiService =
-        new GeminiRecommendationService();
+    private IAiRecommendationService aiService;
 
     private static CarConfiguratorManager activeInstance;
-
-    public event Action<EstimateData> OnConfigUpdated;
 
     /// <summary>
     /// 견적 및 선택 파츠 설정이 갱신되었을 때 발생하는 이벤트
@@ -262,27 +259,6 @@ public class CarConfiguratorManager : MonoBehaviour
             OnRecommendationFailed?.Invoke(userMessage);
             return null;
         }
-        catch (InvalidOperationException ex)
-        {
-            Debug.LogError($"[{nameof(CarConfiguratorManager)}] AI 추천 요청 실패 (API 키 오류): {ex.Message}");
-            OnRecommendationFailed?.Invoke("API 키가 설정되지 않았습니다. 설정 파일(config.json)을 확인해주세요.");
-            return null;
-        }
-        catch (TaskCanceledException ex)
-        {
-            Debug.LogError($"[{nameof(CarConfiguratorManager)}] AI 추천 요청 실패 (응답 시간 초과): {ex.Message}");
-            OnRecommendationFailed?.Invoke("AI 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.");
-            return null;
-        }
-        catch (HttpRequestException ex)
-        {
-            Debug.LogError($"[{nameof(CarConfiguratorManager)}] AI 추천 요청 실패 (통신 오류): {ex.Message}");
-            string userMessage = (ex.Message.Contains("503") || ex.Message.Contains("429"))
-                ? "현재 AI 서버가 혼잡합니다. 잠시 후 다시 시도해주세요."
-                : "네트워크 통신 오류가 발생했습니다. 인터넷 연결을 확인해주세요.";
-            OnRecommendationFailed?.Invoke(userMessage);
-            return null;
-        }
         catch (Exception ex)
         {
             Debug.LogError($"[{nameof(CarConfiguratorManager)}] AI 추천 요청 실패: {ex.Message}");
@@ -320,11 +296,22 @@ public class CarConfiguratorManager : MonoBehaviour
                     continue;
                 }
 
-                CarPartConfigurator configurator = GetConfigurator(part.category);
-                if (configurator != null)
+                if (part.category == PartCategory.Wheel)
                 {
-                    configurator.SelectOption(part);
-                    appliedCount++;
+                    if (wheelModelConfigurator != null)
+                    {
+                        SelectWheelById(part);
+                        appliedCount++;
+                    }
+                }
+                else
+                {
+                    CarPartConfigurator configurator = GetConfigurator(part.category);
+                    if (configurator != null)
+                    {
+                        configurator.SelectOption(part);
+                        appliedCount++;
+                    }
                 }
             }
         }
