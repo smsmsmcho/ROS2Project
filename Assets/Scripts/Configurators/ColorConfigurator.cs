@@ -27,13 +27,34 @@ public class ColorConfigurator : CarPartConfigurator
 
         if (ColorUtility.TryParseHtmlString(part.colorHex, out Color color))
         {
+
+
             foreach (Renderer r in bodyRenderers)
             {
                 if (r != null)
                 {
-                    r.material.color = color;
+                    Material mat = r.material;
+
+                    if (mat.HasProperty("Color_CF7B3627"))
+                    {
+                        Color originalColor = mat.GetColor("Color_CF7B3627");
+
+                        originalColor.r = color.r;
+                        originalColor.g = color.g;
+                        originalColor.b = color.b;
+
+                        mat.SetColor("Color_CF7B3627", originalColor);
+                    }
+                    else
+                    {
+                        Debug.LogWarning(
+                            $"{mat.name}: Color_CF7B3627 속성이 없습니다."
+                        );
+                    }
                 }
             }
+
+
 
             Debug.Log($"[Color] 바디 색상 적용 완료: {part.name} ({part.colorHex}) - 적용 렌더러 {bodyRenderers.Count}개");
         }
