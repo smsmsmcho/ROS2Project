@@ -38,6 +38,11 @@ public class CarConfiguratorUIController : MonoBehaviour
 
     private PartCategory currentCategory;
 
+    // 현재 UI에서 선택된 부품 ID
+    private readonly HashSet<string> selectedPartIds
+        = new HashSet<string>();
+
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureControllerInitializedOnPlay()
     {
@@ -173,13 +178,58 @@ public class CarConfiguratorUIController : MonoBehaviour
             aiPanel.SetActive(targetPanel == aiPanel);
     }
 
+
     public void OnOptionSelected(CarPart part)
     {
         if (manager == null || part == null)
             return;
 
+        List<PartOptionItem> items = GetOptionItems(part.category);
+
+        if (part.category == PartCategory.Accessory)
+        {
+            // 액세서리는 각각 독립적으로 선택/해제
+            if (!selectedPartIds.Add(part.id))
+                selectedPartIds.Remove(part.id);
+        }
+        else
+        {
+            // 색상과 휠은 같은 카테고리에서 하나만 선택
+            foreach (PartOptionItem item in items)
+            {
+                if (item == null || item.Part == null)
+                    continue;
+
+                selectedPartIds.Remove(item.Part.id);
+            }
+
+            selectedPartIds.Add(part.id);
+        }
+
+        // 기존 차량 부품 적용 기능 유지
         manager.ApplyPart(part.id);
+
+        // UI 하이라이트 갱신
+        RefreshHighlights(part.category);
     }
+
+
+    private void RefreshHighlights(PartCategory category)
+    {
+        List<PartOptionItem> items = GetOptionItems(category);
+
+        foreach (PartOptionItem item in items)
+        {
+            if (item == null || item.Part == null)
+                continue;
+
+            bool isSelected = selectedPartIds.Contains(item.Part.id);
+
+            item.SetSelected(isSelected);
+        }
+    }
+
+
 
     public void ShowOptions(List<CarPart> options)
     {
@@ -206,6 +256,19 @@ public class CarConfiguratorUIController : MonoBehaviour
             }
 
         }
+
+
+        // 옵션 바인딩 완료 후 현재 선택 상태 복원
+        RefreshHighlights(currentCategory);
+
+        if (options.Count > items.Count)
+        {
+            Debug.LogWarning(
+                $"{currentCategory}: 데이터 옵션 수({options.Count})가 " +
+                $"버튼 수({items.Count})보다 많습니다."
+            );
+        }
+
 
         if (options.Count > items.Count)
         {

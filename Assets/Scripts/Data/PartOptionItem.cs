@@ -4,21 +4,34 @@ using UnityEngine.UI;
 
 public class PartOptionItem : MonoBehaviour
 {
+    [Header("UI")]
     [SerializeField] private Button button;
+    [SerializeField] private GameObject activeHighlight;
 
     private CarPart part;
     private CarConfiguratorUIController controller;
+
+    public CarPart Part => part;
 
     public void Bind(
         CarPart part,
         CarConfiguratorUIController controller)
     {
-
         this.part = part;
         this.controller = controller;
 
         if (button == null)
             button = GetComponent<Button>();
+
+        // ActiveHighlight 자동 탐색
+        if (activeHighlight == null)
+        {
+            Transform highlightTransform =
+                transform.Find("ActiveHighlight");
+
+            if (highlightTransform != null)
+                activeHighlight = highlightTransform.gameObject;
+        }
 
         if (button == null)
         {
@@ -30,11 +43,14 @@ public class PartOptionItem : MonoBehaviour
 
         button.onClick.RemoveListener(OnClicked);
         button.onClick.AddListener(OnClicked);
+
+        SetSelected(false);
     }
 
     public void OnClicked()
     {
-        Debug.Log($"버튼 클릭됨{gameObject.name}");
+        Debug.Log($"버튼 클릭됨: {gameObject.name}");
+
         if (part == null)
         {
             Debug.LogWarning(
@@ -45,5 +61,13 @@ public class PartOptionItem : MonoBehaviour
 
         if (controller != null)
             controller.OnOptionSelected(part);
+    }
+
+    public void SetSelected(bool selected)
+    {
+        if (activeHighlight != null)
+        {
+            activeHighlight.SetActive(selected);
+        }
     }
 }
