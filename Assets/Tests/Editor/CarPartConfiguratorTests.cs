@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 
 /// <summary>
-/// CarPartConfigurator의 핵심 3대 동작(초기화, 파츠 교체 토글, 예외 방어)을 검증하는 단위 테스트
+/// CarPartConfigurator의 독립 토글 동작(초기화, 파츠 개별 토글, 다중 장착 목록 반환, 예외 방어)을 검증하는 단위 테스트
 /// </summary>
 public class CarPartConfiguratorTests
 {
@@ -25,11 +25,11 @@ public class CarPartConfiguratorTests
         rootObject = new GameObject("Test_CarPartConfigurator");
         configurator = rootObject.AddComponent<CarPartConfigurator>();
 
-        // 2. 가짜 CarPart 데이터 준비
+        // 2. 가상 CarPart 데이터 준비
         partA = new CarPart { id = "acc_spoiler_std", name = "Standard Spoiler", category = PartCategory.Accessory, price = 1000 };
         partB = new CarPart { id = "acc_carbon_wing", name = "Carbon Racing Wing", category = PartCategory.Accessory, price = 2000 };
 
-        // 3. 가짜 3D 모델 GameObject 준비
+        // 3. 가상 3D 모델 GameObject 준비
         modelObjA = new GameObject("Model_A");
         modelObjB = new GameObject("Model_B");
 
@@ -48,57 +48,61 @@ public class CarPartConfiguratorTests
     }
 
     /// <summary>
-    /// [핵심 1] 초기화 시 첫 번째 파츠가 기본 선택되고 첫 번째 3D 모델만 켜지는지 검증
+    /// [핵심 1] 초기화 시 옵션 목록이 등록되는지 검증
     /// </summary>
     [Test]
-    public void Initialize_SelectsFirstOptionByDefault_AndActivatesOnlyFirstGameObject()
+    public void Initialize_RegistersOptionsCorrectly()
     {
         var parts = new List<CarPart> { partA, partB };
-
         configurator.Initialize(parts);
 
-        // 첫 번째 파츠 선택 및 3D 모델 활성화 상태 검증
         Assert.AreEqual(2, configurator.GetOptions().Count);
-        Assert.AreEqual(partA, configurator.GetSelectedPart());
-        Assert.IsTrue(modelObjA.activeSelf, "첫 번째 모델만 켜져야 합니다.");
-        Assert.IsFalse(modelObjB.activeSelf, "두 번째 모델은 꺼져야 합니다.");
     }
 
     /// <summary>
-    /// [핵심 2] 파츠 변경(SelectOption) 시 이전 3D 모델은 꺼지고 새 3D 모델만 켜지는지 검증
+    /// [핵심 2] 파츠 선택(SelectOption) 시 해당 파츠가 단독 토글(On/Off) 및 다중 장착되는지 검증
     /// </summary>
     [Test]
-    public void SelectOption_SwitchesActiveGameObjectCorrectly()
+    public void SelectOption_TogglesActiveGameObjectAndSupportsMultiEquip()
     {
         var parts = new List<CarPart> { partA, partB };
         configurator.Initialize(parts);
 
-        // 두 번째 파츠로 교체
-        configurator.SelectOption(partB);
+        // 1. partA 토글 On
+        configurator.SelectOption(partA);
+        Assert.IsTrue(modelObjA.activeSelf, "A 모델이 켜져야 합니다.");
+        Assert.AreEqual(1, configurator.GetSelectedParts().Count);
 
-        // 파츠 갱신 및 3D 모델 On/Off 토글 검증
-        Assert.AreEqual(partB, configurator.GetSelectedPart());
-        Assert.IsFalse(modelObjA.activeSelf, "이전 모델은 꺼져야 합니다.");
-        Assert.IsTrue(modelObjB.activeSelf, "새로 선택된 모델만 켜져야 합니다.");
+        // 2. partB 토글 On (A와 동시 장착)
+        configurator.SelectOption(partB);
+        Assert.IsTrue(modelObjA.activeSelf, "A 모델은 계속 켜져있어야 합니다.");
+        Assert.IsTrue(modelObjB.activeSelf, "B 모델도 켜져있어야 합니다.");
+        Assert.AreEqual(2, configurator.GetSelectedParts().Count);
+
+        // 3. partA 다시 클릭 -> 토글 Off
+        configurator.SelectOption(partA);
+        Assert.IsFalse(modelObjA.activeSelf, "A 모델은 토글되어 꺼져야 합니다.");
+        Assert.IsTrue(modelObjB.activeSelf, "B 모델은 켜진 상태를 유지해야 합니다.");
+        Assert.AreEqual(1, configurator.GetSelectedParts().Count);
+        Assert.AreEqual(partB, configurator.GetSelectedParts()[0]);
     }
 
     /// <summary>
     /// [핵심 3] null 등 비정상 입력 시 기존 장착 상태를 안전하게 유지하는지 검증
     /// </summary>
     [Test]
-    public void SelectOption_WithNull_PreservesCurrentSelectionAndActiveState()
+    public void SelectOption_WithNull_PreservesCurrentActiveState()
     {
         var parts = new List<CarPart> { partA, partB };
         configurator.Initialize(parts);
 
-        // 의도된 Warning 로그 선언 (콘솔에 경고 느낌표가 뜨지 않도록 처리)
-        LogAssert.Expect(LogType.Warning, "[Test_CarPartConfigurator] 선택하려는 CarPart가 null입니다.");
+        configurator.SelectOption(partA);
+        Assert.IsTrue(modelObjA.activeSelf);
 
-        // null 전달 시도
+        LogAssert.Expect(LogType.Warning, "[Test_CarPartConfigurator] 선택하려는 CarPart가 null입니다.");
         configurator.SelectOption(null);
 
-        // 기존 선택과 모델 활성 상태가 안전하게 보존되는지 검증
-        Assert.AreEqual(partA, configurator.GetSelectedPart());
         Assert.IsTrue(modelObjA.activeSelf);
+        Assert.AreEqual(1, configurator.GetSelectedParts().Count);
     }
 }

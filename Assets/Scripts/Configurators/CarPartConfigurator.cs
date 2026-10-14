@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// 특정 카테고리의 파츠 옵션들을 관리하고,
-/// 선택된 파츠에 따라 실제 3D 게임오브젝트를 활성/비활성화하는 설정 컴포넌트
+/// 선택된 파츠에 따라 실제 3D 게임오브젝트를 활성/비활성화(토글)하는 설정 컴포넌트
 /// </summary>
 public class CarPartConfigurator : MonoBehaviour
 {
@@ -17,7 +17,7 @@ public class CarPartConfigurator : MonoBehaviour
     [Tooltip("options 목록과 1:1로 매핑되는 3D 모델 GameObject 목록 (인덱스 일치)")]
     [SerializeField] private List<GameObject> optionObjects = new List<GameObject>();
 
-    // 현재 선택된 파츠
+    // 현재 선택된 파츠 (단일 선택용)
     private CarPart selectedPart;
 
     public void Initialize(List<CarPart> partOptions)
@@ -29,7 +29,8 @@ public class CarPartConfigurator : MonoBehaviour
             Debug.LogWarning($"[{gameObject.name}] 옵션 데이터 수({options.Count})와 3D 오브젝트 수({optionObjects.Count})가 일치하지 않습니다. 인스펙터 설정을 확인해주세요.");
         }
 
-        if (options.Count > 0)
+        // 악세서리는 개별 토글 파츠이므로, 시작 시 첫 번째 옵션을 강제로 켜지 않고 씬의 초기 상태를 유지합니다.
+        if (category != PartCategory.Accessory && options.Count > 0)
         {
             SelectOption(options[0]); // 기본 첫 번째 옵션 적용
         }
@@ -44,7 +45,7 @@ public class CarPartConfigurator : MonoBehaviour
     }
 
     /// <summary>
-    /// 특정 파츠를 선택하고 차량에 적용합니다.
+    /// 특정 파츠를 선택하고 차량에 적용(토글)합니다.
     /// </summary>
     public void SelectOption(CarPart part)
     {
@@ -59,23 +60,75 @@ public class CarPartConfigurator : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 선택되어 적용 중인 CarPart를 반환합니다.
+    /// 현재 활성화(장착)된 모든 CarPart 목록을 반환합니다.
+    /// 3D 오브젝트 매핑(optionObjects)이 있는 경우 activeSelf가 true인 모든 파츠를 반환합니다.
+    /// </summary>
+    public virtual List<CarPart> GetSelectedParts()
+    {
+        var activeParts = new List<CarPart>();
+        if (options != null && optionObjects != null && optionObjects.Count > 0)
+        {
+            for (int i = 0; i < options.Count && i < optionObjects.Count; i++)
+            {
+                if (optionObjects[i] != null && optionObjects[i].activeSelf)
+                {
+                    activeParts.Add(options[i]);
+                }
+            }
+            return activeParts;
+        }
+
+        if (selectedPart != null)
+        {
+            activeParts.Add(selectedPart);
+        }
+        return activeParts;
+    }
+
+    /// <summary>
+    /// 현재 선택되어 적용 중인 단일 CarPart를 반환합니다.
+    /// 다중 선택인 경우 첫 번째로 활성화된 파츠를 반환합니다.
     /// </summary>
     public CarPart GetSelectedPart()
     {
+        if (optionObjects != null && optionObjects.Count > 0)
+        {
+            var parts = GetSelectedParts();
+            return parts.Count > 0 ? parts[0] : null;
+        }
         return selectedPart;
     }
 
     /// <summary>
-    /// 선택된 파츠를 실제 차량 3D 모델에 적용합니다.
-    /// 기본 구현은 1:1 매핑된 GameObject 활성/비활성화이며,
+    /// 특정 파츠의 3D 오브젝트 활성화 상태를 명시적으로 설정합니다.
+    /// </summary>
+    public virtual void SetOptionActive(CarPart part, bool active)
+    {
+        if (part == null || options == null || optionObjects == null) return;
+
+        int selectedIndex = options.FindIndex(p => p.id == part.id);
+        if (selectedIndex == -1)
+        {
+            selectedIndex = options.IndexOf(part);
+        }
+
+        if (selectedIndex >= 0 && selectedIndex < optionObjects.Count && optionObjects[selectedIndex] != null)
+        {
+            optionObjects[selectedIndex].SetActive(active);
+            if (active) selectedPart = part;
+        }
+    }
+
+    /// <summary>
+    /// 선택한 파츠를 실제 차량 3D 모델에 적용합니다.
+    /// 악세서리는 단독 토글(activeSelf 반전)로 동작하며,
     /// ColorConfigurator 등 하위 클래스에서 머티리얼 변경 등으로 오버라이드할 수 있습니다.
     /// </summary>
     protected virtual void ApplyPart(CarPart part)
     {
         if (options == null || optionObjects == null) return;
 
-        // 선택된 파츠의 인덱스 찾기 (ID 기준 또는 참조 기준)
+        // 선택한 파츠의 인덱스 찾기 (ID 기준 또는 참조 기준)
         int selectedIndex = options.FindIndex(p => p.id == part.id);
         if (selectedIndex == -1)
         {
@@ -84,21 +137,16 @@ public class CarPartConfigurator : MonoBehaviour
 
         if (selectedIndex == -1)
         {
-            Debug.LogWarning($"[{gameObject.name}] 선택된 파츠 '{part.name}({part.id})'가 options 목록에 존재하지 않습니다.");
+            Debug.LogWarning($"[{gameObject.name}] 선택한 파츠 '{part.name}({part.id})'가 options 목록에 존재하지 않습니다.");
             return;
         }
 
-        // 인덱스가 일치하는 GameObject만 활성화하고 나머지는 비활성화
-        for (int i = 0; i < optionObjects.Count; i++)
+        if (optionObjects[selectedIndex] != null)
         {
-            if (optionObjects[i] != null)
-            {
-                bool isActive = (i == selectedIndex);
-                optionObjects[i].SetActive(isActive);
-            }
+            bool isActive = optionObjects[selectedIndex].activeSelf;
+            optionObjects[selectedIndex].SetActive(!isActive);
         }
 
         Debug.Log($"[{category}] 파츠 적용 완료: {part.name} ({part.price:N0}원)");
     }
 }
-
