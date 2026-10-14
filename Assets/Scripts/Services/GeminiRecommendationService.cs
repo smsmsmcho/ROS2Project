@@ -116,9 +116,10 @@ public class GeminiRecommendationService : IAiRecommendationService
 
         string systemInstruction =
             "당신은 전문 자동차 스타일링 및 커스텀 튜닝 컨설턴트 AI입니다.\n" +
-            "사용자의 요구사항을 분석하여 제공된 파츠 목록 중에서 최적의 조합(Accessory 1개, Wheel 1개, Color 1개)을 추천하세요.\n" +
-            "규칙 1: 추천 시 반드시 제공된 파츠 목록에 존재하는 ID만 accessoryId, wheelId, colorId 필드에 각각 1개씩 지정해야 합니다.\n" +
-            "규칙 2: 만약 사용자의 입력이 차량 스타일링·분위기·색상·튜닝·드라이브 추천과 전혀 무관한 질문이라면, accessoryId, wheelId, colorId를 모두 \"NONE\"으로 지정하고, conceptTitle은 빈 문자열(\"\")로 둔 뒤 reasoning에 차량 커스터마이징 관련 질문을 해달라고 친절하게 안내하세요.";
+            "사용자의 요구사항을 분석하여 제공된 파츠 목록 중에서 최적의 조합(Accessory 0개 이상 다중 선택 가능, Wheel 1개, Color 1개)을 추천하세요.\n" +
+            "규칙 1: accessoryIds 배열에는 추천할 악세서리 ID들을 담으세요. 사용자가 악세서리를 원하지 않거나 어울리지 않는 경우 빈 배열 []로 지정할 수 있으며, 어울리는 악세서리가 여러 개라면 배열에 복수로 포함하세요.\n" +
+            "규칙 2: wheelId, colorId 필드에는 반드시 제공된 목록에 존재하는 ID를 각각 1개씩 지정해야 합니다.\n" +
+            "규칙 3: 만약 사용자의 입력이 차량 스타일링·분위기·색상·튜닝·드라이브 추천과 전혀 무관한 질문이라면, accessoryIds는 빈 배열 [], wheelId와 colorId는 \"NONE\"으로 지정하고, conceptTitle은 빈 문자열(\"\")로 둔 뒤 reasoning에 차량 커스터마이징 관련 질문을 해달라고 친절하게 안내하세요.";
 
         string userContent = $"[선택 가능한 파츠 목록]\n{partsTextBuilder}\n\n[사용자 요청]\n{userPrompt}";
         string combinedPrompt = $"{systemInstruction}\n\n{userContent}";
@@ -131,11 +132,11 @@ public class GeminiRecommendationService : IAiRecommendationService
         var wheelIds = availableParts.Where(p => p.category == PartCategory.Wheel).Select(p => p.id).ToList();
         var colorIds = availableParts.Where(p => p.category == PartCategory.Color).Select(p => p.id).ToList();
 
-        string accessorySchema = BuildEnumPropertyJson(accessoryIds);
+        string accessoryArraySchema = BuildEnumArrayPropertyJson(accessoryIds);
         string wheelSchema = BuildEnumPropertyJson(wheelIds);
         string colorSchema = BuildEnumPropertyJson(colorIds);
 
-        // responseSchema(Structured Outputs)를 통해 카테고리별 1개 ID 및 enum 제약을 강제
+        // responseSchema(Structured Outputs)를 통해 악세서리 다중 선택(ARRAY) 및 휠/컬러 1개 ID 및 enum 제약을 강제
         string requestJson = $@"{{
   ""contents"": [
     {{
@@ -152,16 +153,27 @@ public class GeminiRecommendationService : IAiRecommendationService
       ""properties"": {{
         ""conceptTitle"": {{ ""type"": ""STRING"" }},
         ""reasoning"": {{ ""type"": ""STRING"" }},
-        ""accessoryId"": {accessorySchema},
+        ""accessoryIds"": {accessoryArraySchema},
         ""wheelId"": {wheelSchema},
         ""colorId"": {colorSchema}
       }},
-      ""required"": [""conceptTitle"", ""reasoning"", ""accessoryId"", ""wheelId"", ""colorId""]
+      ""required"": [""conceptTitle"", ""reasoning"", ""accessoryIds"", ""wheelId"", ""colorId""]
     }}
   }}
 }}";
 
         return requestJson;
+    }
+
+    private static string BuildEnumArrayPropertyJson(List<string> allowedIds)
+    {
+        if (allowedIds == null || allowedIds.Count == 0)
+        {
+            return @"{ ""type"": ""ARRAY"", ""items"": { ""type"": ""STRING"" } }";
+        }
+
+        string enumItems = string.Join(", ", allowedIds.Select(ToJsonStringLiteral));
+        return $@"{{ ""type"": ""ARRAY"", ""items"": {{ ""type"": ""STRING"", ""enum"": [{enumItems}] }} }}";
     }
 
     private static string BuildEnumPropertyJson(List<string> allowedIds)
@@ -206,13 +218,41 @@ public class GeminiRecommendationService : IAiRecommendationService
         }
 
         var validIds = new HashSet<string>(availableParts.Select(p => p.id));
-        var selectedIds = new[] { dto.accessoryId, dto.wheelId, dto.colorId };
+        var resultIds = new List<string>();
+
+        // 1. 다중 악세서리 ID 수집
+        if (dto.accessoryIds != null)
+        {
+            foreach (string accId in dto.accessoryIds)
+            {
+                if (!string.IsNullOrEmpty(accId) && validIds.Contains(accId) && !resultIds.Contains(accId))
+                {
+                    resultIds.Add(accId);
+                }
+            }
+        }
+        else if (!string.IsNullOrEmpty(dto.accessoryId) && validIds.Contains(dto.accessoryId))
+        {
+            resultIds.Add(dto.accessoryId);
+        }
+
+        // 2. 휠 ID 수집
+        if (!string.IsNullOrEmpty(dto.wheelId) && validIds.Contains(dto.wheelId))
+        {
+            resultIds.Add(dto.wheelId);
+        }
+
+        // 3. 색상 ID 수집
+        if (!string.IsNullOrEmpty(dto.colorId) && validIds.Contains(dto.colorId))
+        {
+            resultIds.Add(dto.colorId);
+        }
 
         return new AiRecommendationData
         {
             conceptTitle = dto.conceptTitle == "NONE" ? string.Empty : dto.conceptTitle,
             reasoning = dto.reasoning,
-            partIds = selectedIds.Where(id => !string.IsNullOrEmpty(id) && validIds.Contains(id)).ToList()
+            partIds = resultIds
         };
     }
 
@@ -320,13 +360,14 @@ public class GeminiRecommendationService : IAiRecommendationService
     }
 
     /// <summary>
-    /// Gemini responseSchema(accessoryId, wheelId, colorId 분리 구조) 역직렬화용 내부 DTO
+    /// Gemini responseSchema(accessoryIds 배열, wheelId, colorId 분리 구조) 역직렬화용 내부 DTO
     /// </summary>
     [Serializable]
     private class StructuredRecommendationDto
     {
         public string conceptTitle;
         public string reasoning;
+        public string[] accessoryIds;
         public string accessoryId;
         public string wheelId;
         public string colorId;
